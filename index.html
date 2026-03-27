@@ -1,31 +1,62 @@
-<main>
-    <div id="section-parts" class="card" style="display:block;">
-        <h3>📦 Actualizar Maestro de Partes</h3>
-        <p>Selecciona el Excel (ID_Cliente, Sebango, PN_Interno, QPC, Tekin_OK, Tekin_NG)</p>
-        <input type="file" id="excel-file" accept=".xlsx, .xls">
-        <button id="btn-upload">Subir a Firebase</button>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KTMEX App B - Escáner</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
+        #video-container { position: fixed; top: 0; left: 0; width: 100%; height: 60%; z-index: 1; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .scan-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 75%; height: 25%; border: 3px solid #fabb00; border-radius: 10px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); z-index: 2; pointer-events: none; }
+        .ui-panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 25px 25px 0 0; z-index: 3; padding: 25px; box-sizing: border-box; transition: 0.3s; }
+        .btn { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; }
+        .lock-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .quiz-option { background: #f0f0f0; border: 2px solid #ddd; padding: 15px; border-radius: 10px; margin-bottom: 10px; width: 100%; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="video-container">
+    <video id="video" autoplay playsinline></video>
+    <div class="scan-overlay"></div>
+</div>
+
+<div class="ui-panel" id="main-panel">
+    <div id="view-login">
+        <h2 style="margin-top:0; color:#e30613">Control de Recolección</h2>
+        <input type="text" id="operador-id" placeholder="ID de Operador (Nómina)" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:10px; box-sizing:border-box; font-size:16px;">
+        <button class="btn" onclick="iniciarSesion()">Comenzar Turno</button>
     </div>
 
-    <div id="section-logs" class="card" style="display:none;">
-        <h3>📊 Bitácora de Escaneos e Incidencias</h3>
-        <table id="table-logs">
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Operador</th>
-                    <th>Status</th>
-                    <th>ID Cliente</th>
-                    <th>Detalle</th>
-                </tr>
-            </thead>
-            <tbody id="log-body"></tbody>
-        </table>
+    <div id="view-workflow" style="display:none">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+            <span id="step-label" style="background:#333; color:white; padding:4px 10px; border-radius:5px; font-size:12px; font-weight:bold;">PASO 1</span>
+            <button onclick="location.reload()" style="background:none; border:none; color:#666">Cerrar Sesión</button>
+        </div>
+        <h3 id="instruction" style="margin: 15px 0;">Escanea JAMAITA (Sebango)</h3>
+        <p id="status-text" style="color:#666; font-size:14px">Buscando patrón KXXX/TXXX...</p>
     </div>
-</main>
+
+    <div id="view-quiz" style="display:none">
+        <h3 style="margin-top:0">Confirmación de TEKIN</h3>
+        <div id="quiz-container">
+            </div>
+    </div>
+</div>
+
+<div id="lock-screen" class="lock-screen">
+    <h1 style="font-size:50px">⚠️</h1>
+    <h2 id="lock-msg">INCIDENCIA DETECTADA</h2>
+    <p>Solicite desbloqueo a TL</p>
+    <input type="password" id="tl-pin" placeholder="PIN LÍDER" style="padding:15px; border-radius:10px; border:none; margin-bottom:15px; text-align:center; font-size:20px;">
+    <button onclick="desbloquear()" style="background:white; color:#e30613; padding:15px 40px; border-radius:10px; border:none; font-weight:bold;">DESBLOQUEAR</button>
+</div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getFirestore, collection, setDoc, doc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
@@ -41,67 +72,114 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LÓGICA DE NAVEGACIÓN ---
-    function switchSection() {
-        const hash = window.location.hash || '#parts';
-        if (hash === '#parts') {
-            document.getElementById('section-parts').style.display = 'block';
-            document.getElementById('section-logs').style.display = 'none';
-        } else if (hash === '#logs') {
-            document.getElementById('section-parts').style.display = 'none';
-            document.getElementById('section-logs').style.display = 'block';
+    let currentStep = 1;
+    let usuario = "";
+    let jamaitaSebango = "";
+    let cajaSebango = "";
+    let materialData = null;
+
+    window.iniciarSesion = async () => {
+        usuario = document.getElementById('operador-id').value;
+        if (!usuario) return alert("Ingrese su nómina");
+        document.getElementById('view-login').style.display = 'none';
+        document.getElementById('view-workflow').style.display = 'block';
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('video').srcObject = stream;
+        iniciarOCR();
+    };
+
+    async function iniciarOCR() {
+        const video = document.getElementById('video');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        async function scan() {
+            if (currentStep > 3) return;
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+            const matchSebango = text.match(/[KT]\d{3}/);
+            const matchM = text.match(/M\d{3,4}/);
+
+            if (currentStep === 1 && matchSebango) {
+                jamaitaSebango = matchSebango[0];
+                currentStep = 2;
+                actualizarUI("PASO 2", "Escanea KANBAN de Caja", `Jamaita OK: ${jamaitaSebango}`);
+            } 
+            else if (currentStep === 2 && matchSebango) {
+                cajaSebango = matchSebango[0];
+                if (cajaSebango !== jamaitaSebango) {
+                    bloquear(`Error: Jamaita ${jamaitaSebango} vs Caja ${cajaSebango}`);
+                } else {
+                    currentStep = 3;
+                    actualizarUI("PASO 3", "Escanea Etiqueta TTMX (MXXX)", "Sincronía de Sebango OK");
+                }
+            }
+            else if (currentStep === 3 && matchM) {
+                const docSnap = await getDoc(doc(db, "Maestro_Partes", matchM[0]));
+                if (docSnap.exists()) {
+                    materialData = docSnap.data();
+                    if (String(materialData.Sebango) !== cajaSebango) {
+                        bloquear(`Error Cruzado: Caja ${cajaSebango} vs Cliente ${materialData.Sebango}`);
+                    } else {
+                        lanzarQuiz();
+                    }
+                }
+            }
+            requestAnimationFrame(scan);
         }
+        scan();
     }
 
-    // Escuchar cambios en la URL
-    window.addEventListener('hashchange', switchSection);
-    // Ejecutar al cargar por primera vez
-    switchSection();
+    function actualizarUI(step, instr, feedback) {
+        document.getElementById('step-label').innerText = step;
+        document.getElementById('instruction').innerText = instr;
+        document.getElementById('status-text').innerText = feedback;
+    }
 
-    // --- LÓGICA DE CARGA EXCEL ---
-    document.getElementById('btn-upload').addEventListener('click', () => {
-        const file = document.getElementById('excel-file').files[0];
-        if (!file) return alert("Por favor, selecciona un archivo Excel primero.");
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-
-                alert(`Procesando ${json.length} registros...`);
-
-                for (const item of json) {
-                    // Importante: El Excel debe tener la columna "ID_Cliente" exacta
-                    const id = String(item.ID_Cliente || item.id_cliente); 
-                    await setDoc(doc(db, "Maestro_Partes", id), item);
-                }
-                alert("Sincronización con Firebase exitosa.");
-            } catch (err) {
-                console.error(err);
-                alert("Error al procesar el archivo. Revisa la consola.");
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    });
-
-    // --- LÓGICA DE LOGS ---
-    const q = query(collection(db, "Bitacora_Incidencias"), orderBy("timestamp", "desc"));
-    onSnapshot(q, (snapshot) => {
-        const body = document.getElementById('log-body');
-        body.innerHTML = "";
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const date = data.timestamp?.toDate().toLocaleString() || 'En proceso...';
-            body.innerHTML += `
-                <tr>
-                    <td>${date}</td>
-                    <td>${data.usuario}</td>
-                    <td style="font-weight:bold; color:${data.status === 'OK' ? '#27ae60' : '#e30613'}">${data.status}</td>
-                    <td>${data.customer_id || '-'}</td>
-                    <td>${data.error_msg || 'Validación Correcta'}</td>
-                </tr>`;
+    function lanzarQuiz() {
+        currentStep = 4;
+        document.getElementById('view-workflow').style.display = 'none';
+        document.getElementById('view-quiz').style.display = 'block';
+        const container = document.getElementById('quiz-container');
+        
+        const opciones = [materialData.Tekin_OK, materialData.Tekin_NG].sort(() => Math.random() - 0.5);
+        container.innerHTML = `<p>Confirma el TEKIN para ${materialData.ID_Cliente}</p>`;
+        opciones.forEach(opt => {
+            container.innerHTML += `<button class="quiz-option" onclick="validarTekin('${opt}')">${opt}</button>`;
         });
-    });
+    }
+
+    window.validarTekin = async (ans) => {
+        if (ans === String(materialData.Tekin_OK)) {
+            await registrar("OK", materialData.ID_Cliente);
+            alert("¡Escaneo Correcto!");
+            location.reload();
+        } else {
+            bloquear(`Tekin Incorrecto: Seleccionó ${ans}, era ${materialData.Tekin_OK}`);
+        }
+    };
+
+    async function bloquear(motivo) {
+        document.getElementById('lock-msg').innerText = motivo;
+        document.getElementById('lock-screen').style.display = 'flex';
+        await registrar("BLOQUEO", materialData?.ID_Cliente || "N/A", motivo);
+    }
+
+    window.desbloquear = () => {
+        if (document.getElementById('tl-pin').value === "1234") location.reload();
+        else alert("PIN de Líder incorrecto");
+    };
+
+    async function registrar(status, id, msg = "") {
+        await addDoc(collection(db, "Bitacora_Incidencias"), {
+            usuario, status, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
+        });
+    }
 </script>
+</body>
+</html>
