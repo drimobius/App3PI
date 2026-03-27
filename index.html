@@ -3,50 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX App B</title>
+    <title>KTMEX Poka-Yoke</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #000; color: white; }
-        #cam-box { position: fixed; top: 0; width: 100%; height: 55%; background: #000; }
+        body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
+        #camera-view { position: fixed; top: 0; width: 100%; height: 55%; background: #000; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 30%; border: 2px solid #fabb00; box-shadow: 0 0 0 1000px rgba(0,0,0,0.6); }
-        .panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 25px; box-sizing: border-box; }
-        .btn { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; }
-        .lock { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; }
-        .quiz-btn { background: #f8f9fa; border: 2px solid #ddd; padding: 15px; width: 100%; margin-bottom: 10px; border-radius: 10px; font-weight: bold; font-size: 18px; }
+        .reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 25%; border: 3px solid #fabb00; border-radius: 10px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); pointer-events: none; }
+        .control-panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 25px; box-sizing: border-box; }
+        .btn-red { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; }
+        .lock-overlay { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        .quiz-opt { background: #f1f5f9; border: 2px solid #cbd5e0; padding: 15px; width: 100%; margin-bottom: 10px; border-radius: 10px; font-weight: bold; font-size: 18px; color: #1a202c; }
     </style>
 </head>
 <body>
 
-<div id="cam-box">
-    <video id="video" autoplay playsinline></video>
-    <div class="guide"></div>
+<div id="camera-view">
+    <video id="webcam" autoplay playsinline></video>
+    <div class="reticle"></div>
 </div>
 
-<div class="panel">
-    <div id="step-login">
-        <h2 style="margin:0 0 15px 0; color:#e30613;">Inspección KTMEX</h2>
-        <input type="text" id="user" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
-        <button class="btn" onclick="startApp()">Entrar a Proceso</button>
+<div class="control-panel">
+    <div id="ui-login">
+        <h2 style="margin:0 0 15px 0; color:#e30613;">Poka-Yoke KTMEX</h2>
+        <input type="text" id="nom-input" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:10px; box-sizing:border-box;">
+        <button class="btn-red" onclick="initApp()">Iniciar Escaneo</button>
     </div>
 
-    <div id="step-scan" style="display:none">
-        <h3 id="instr" style="margin-top:0;">Paso 1: Escanea JAMAITA</h3>
-        <p id="hint" style="color:#666;">Buscando código K/T/P...</p>
+    <div id="ui-workflow" style="display:none">
+        <h3 id="instr-text" style="margin-top:0;">PASO 1: Escanea JAMAITA</h3>
+        <p id="feedback" style="color:#718096; font-size:14px;">Buscando código (K, T o P)...</p>
     </div>
 
-    <div id="step-quiz" style="display:none">
-        <h3 style="margin-top:0;">Validación Visual</h3>
-        <div id="img-ref"></div>
-        <div id="options" style="margin-top:15px;"></div>
+    <div id="ui-quiz" style="display:none; text-align:center;">
+        <h3 style="margin-top:0;">Referencia Visual</h3>
+        <div id="photo-ref" style="margin-bottom:15px;"></div>
+        <div id="quiz-btns"></div>
     </div>
 </div>
 
-<div id="lock" class="lock">
-    <h1>⚠️ BLOQUEO</h1>
-    <p id="error-msg" style="padding:20px; text-align:center; font-weight:bold;"></p>
-    <input type="password" id="pin" placeholder="PIN LÍDER" style="padding:15px; border-radius:8px; border:none; margin-bottom:10px; text-align:center;">
-    <button onclick="location.reload()" style="background:white; color:red; padding:15px 30px; border-radius:8px; border:none; font-weight:bold;">REINTENTAR</button>
+<div id="lock" class="lock-overlay">
+    <h1 style="font-size:60px;">🛑</h1>
+    <h2 id="lock-reason">ERROR DETECTADO</h2>
+    <p>Solicitar desbloqueo de Líder (TL)</p>
+    <input type="password" id="pin-tl" placeholder="PIN" style="padding:15px; border-radius:10px; border:none; margin-bottom:15px; text-align:center; font-size:24px;">
+    <button onclick="location.reload()" style="background:white; color:red; padding:15px 40px; border-radius:10px; border:none; font-weight:bold;">REINTENTAR</button>
 </div>
 
 <script type="module">
@@ -56,7 +57,6 @@
     const firebaseConfig = {
         apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
         authDomain: "logistica-ktmex.firebaseapp.com",
-        databaseURL: "https://logistica-ktmex-default-rtdb.firebaseio.com",
         projectId: "logistica-ktmex",
         storageBucket: "logistica-ktmex.firebasestorage.app",
         messagingSenderId: "166597623735",
@@ -66,56 +66,59 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let stage = 1; // 1: Jamaita, 2: Caja, 3: TTMX
-    let operator = "";
-    let jamaita = "";
-    let partData = null;
+    let step = 1;
+    let userNom = "";
+    let jCode = "";
+    let dataM = null;
 
-    window.startApp = async () => {
-        operator = document.getElementById('user').value;
-        if(!operator) return;
-        document.getElementById('step-login').style.display = 'none';
-        document.getElementById('step-scan').style.display = 'block';
+    window.initApp = async () => {
+        userNom = document.getElementById('nom-input').value;
+        if(!userNom) return;
+        document.getElementById('ui-login').style.display = 'none';
+        document.getElementById('ui-workflow').style.display = 'block';
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        document.getElementById('video').srcObject = stream;
-        runOCR();
+        document.getElementById('webcam').srcObject = stream;
+        runScanner();
     };
 
-    async function runOCR() {
-        const video = document.getElementById('video');
+    async function runScanner() {
+        const video = document.getElementById('webcam');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
         const loop = async () => {
-            if(stage > 3) return;
+            if(step > 3) return;
             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
             
             const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
             
-            // RECONOCIMIENTO MEJORADO: K, T o P + dígitos
-            const foundJ = text.match(/[KTP]\d{3,4}/);
-            const foundM = text.match(/M\d{3,4}/);
+            // LIMPIEZA AGRESIVA: Quitamos todos los espacios y saltos de línea
+            const raw = text.replace(/\s/g, '').toUpperCase();
+            
+            const matchJ = raw.match(/[KTP]\d{3,4}/); // Jamaita/Caja
+            const matchM = raw.match(/M\d{3,4}/);   // TTMX
 
-            if (stage === 1 && foundJ) {
-                jamaita = foundJ[0];
-                stage = 2;
-                document.getElementById('instr').innerText = "Paso 2: Escanea CAJA";
-                document.getElementById('hint').innerText = `Jamaita OK: ${jamaita}`;
+            if (step === 1 && matchJ) {
+                jCode = matchJ[0];
+                step = 2;
+                document.getElementById('instr-text').innerText = "PASO 2: Escanea CAJA";
+                document.getElementById('feedback').innerText = `Jamaita OK: ${jCode}`;
             } 
-            else if (stage === 2 && foundJ) {
-                if (foundJ[0] !== jamaita) return stopAndLock(`Mezcla: Jamaita ${jamaita} vs Caja ${foundJ[0]}`);
-                stage = 3;
-                document.getElementById('instr').innerText = "Paso 3: Escanea TTMX (MXXX)";
+            else if (step === 2 && matchJ) {
+                if (matchJ[0] !== jCode) return lockOut(`Mezcla: Jamaita era ${jCode} pero detecté ${matchJ[0]}`);
+                step = 3;
+                document.getElementById('instr-text').innerText = "PASO 3: Escanea TTMX (MXXX)";
+                document.getElementById('feedback').innerText = "Sincronía de Sebango Correcta";
             }
-            else if (stage === 3 && foundM) {
-                const snap = await getDoc(doc(db, "Maestro_Partes", foundM[0]));
+            else if (step === 3 && matchM) {
+                const snap = await getDoc(doc(db, "Maestro_Partes", matchM[0]));
                 if (snap.exists()) {
-                    partData = snap.data();
-                    if (String(partData.Sebango) !== jamaita) {
-                        stopAndLock(`Error Cruzado: TTMX ${foundM[0]} exige Sebango ${partData.Sebango}`);
+                    dataM = snap.data();
+                    if (String(dataM.Sebango).toUpperCase() !== jCode) {
+                        lockOut(`Error Cruzado: ${matchM[0]} requiere Sebango ${dataM.Sebango}`);
                     } else {
-                        showQuiz();
+                        showJidoka();
                     }
                 }
             }
@@ -124,43 +127,45 @@
         loop();
     }
 
-    function showQuiz() {
-        stage = 4;
-        document.getElementById('step-scan').style.display = 'none';
-        document.getElementById('step-quiz').style.display = 'block';
+    function showJidoka() {
+        step = 4;
+        document.getElementById('ui-workflow').style.display = 'none';
+        document.getElementById('ui-quiz').style.display = 'block';
         
-        if(partData.img_url) {
-            document.getElementById('img-ref').innerHTML = `<img src="${partData.img_url}" style="width:100%; border-radius:10px;">`;
+        if(dataM.img_url) {
+            document.getElementById('photo-ref').innerHTML = `<img src="${dataM.img_url}" style="width:100%; max-height:180px; border-radius:12px; object-fit:contain;">`;
         }
         
-        const opts = [partData.Tekin_OK, partData.Tekin_NG].sort(() => Math.random() - 0.5);
-        const optDiv = document.getElementById('options');
-        optDiv.innerHTML = `<p>Selecciona el TEKIN para ${partData.ID_Cliente}</p>`;
+        const opts = [dataM.Tekin_OK, dataM.Tekin_NG].sort(() => Math.random() - 0.5);
+        const btnBox = document.getElementById('quiz-btns');
+        btnBox.innerHTML = `<p style="margin-bottom:15px; font-weight:bold;">¿Cuál es el TEKIN de ${dataM.ID_Cliente}?</p>`;
         opts.forEach(o => {
-            optDiv.innerHTML += `<button class="quiz-btn" onclick="checkTekin('${o}')">${o}</button>`;
+            const b = document.createElement('button');
+            b.className = 'quiz-opt';
+            b.innerText = o;
+            b.onclick = () => {
+                if(o === String(dataM.Tekin_OK)) {
+                    logEv("OK", dataM.ID_Cliente);
+                    alert("¡Escaneo Validado!");
+                    location.reload();
+                } else {
+                    lockOut(`Tekin Incorrecto para ${dataM.ID_Cliente}`);
+                }
+            };
+            btnBox.appendChild(b);
         });
     }
 
-    window.checkTekin = async (val) => {
-        if(val === String(partData.Tekin_OK)) {
-            await log("OK", partData.ID_Cliente);
-            alert("Proceso Correcto");
-            location.reload();
-        } else {
-            stopAndLock(`Tekin Incorrecto: Seleccionó ${val}`);
-        }
-    };
-
-    async function stopAndLock(msg) {
-        stage = 99;
-        document.getElementById('error-msg').innerText = msg;
+    async function lockOut(msg) {
+        step = 99;
+        document.getElementById('lock-reason').innerText = msg;
         document.getElementById('lock').style.display = 'flex';
-        await log("ERROR", partData?.ID_Cliente || "N/A", msg);
+        await logEv("ERROR", dataM?.ID_Cliente || "N/A", msg);
     }
 
-    async function log(st, id, msg = "") {
+    async function logEv(st, id, msg = "") {
         await addDoc(collection(db, "Bitacora_Incidencias"), {
-            usuario: operator, status: st, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
+            usuario: userNom, status: st, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
         });
     }
 </script>
