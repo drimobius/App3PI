@@ -3,55 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX App B - Escáner</title>
+    <title>KTMEX App B</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
-        #video-container { position: fixed; top: 0; left: 0; width: 100%; height: 60%; z-index: 1; }
+        body { font-family: sans-serif; margin: 0; background: #000; color: white; }
+        #cam-box { position: fixed; top: 0; width: 100%; height: 55%; background: #000; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .scan-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 75%; height: 25%; border: 3px solid #fabb00; border-radius: 10px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); z-index: 2; pointer-events: none; }
-        .ui-panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 25px 25px 0 0; z-index: 3; padding: 25px; box-sizing: border-box; transition: 0.3s; }
-        .btn { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; }
-        .lock-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .quiz-option { background: #f0f0f0; border: 2px solid #ddd; padding: 15px; border-radius: 10px; margin-bottom: 10px; width: 100%; font-size: 18px; font-weight: bold; }
+        .guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 30%; border: 2px solid #fabb00; box-shadow: 0 0 0 1000px rgba(0,0,0,0.6); }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 25px; box-sizing: border-box; }
+        .btn { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; }
+        .lock { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        .quiz-btn { background: #f8f9fa; border: 2px solid #ddd; padding: 15px; width: 100%; margin-bottom: 10px; border-radius: 10px; font-weight: bold; font-size: 18px; }
     </style>
 </head>
 <body>
 
-<div id="video-container">
+<div id="cam-box">
     <video id="video" autoplay playsinline></video>
-    <div class="scan-overlay"></div>
+    <div class="guide"></div>
 </div>
 
-<div class="ui-panel" id="main-panel">
-    <div id="view-login">
-        <h2 style="margin-top:0; color:#e30613">Control de Recolección</h2>
-        <input type="text" id="operador-id" placeholder="ID de Operador (Nómina)" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:10px; box-sizing:border-box; font-size:16px;">
-        <button class="btn" onclick="iniciarSesion()">Comenzar Turno</button>
+<div class="panel">
+    <div id="step-login">
+        <h2 style="margin:0 0 15px 0; color:#e30613;">Inspección KTMEX</h2>
+        <input type="text" id="user" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
+        <button class="btn" onclick="startApp()">Entrar a Proceso</button>
     </div>
 
-    <div id="view-workflow" style="display:none">
-        <div style="display:flex; justify-content:space-between; align-items:center">
-            <span id="step-label" style="background:#333; color:white; padding:4px 10px; border-radius:5px; font-size:12px; font-weight:bold;">PASO 1</span>
-            <button onclick="location.reload()" style="background:none; border:none; color:#666">Cerrar Sesión</button>
-        </div>
-        <h3 id="instruction" style="margin: 15px 0;">Escanea JAMAITA (Sebango)</h3>
-        <p id="status-text" style="color:#666; font-size:14px">Buscando patrón KXXX/TXXX...</p>
+    <div id="step-scan" style="display:none">
+        <h3 id="instr" style="margin-top:0;">Paso 1: Escanea JAMAITA</h3>
+        <p id="hint" style="color:#666;">Buscando código K/T/P...</p>
     </div>
 
-    <div id="view-quiz" style="display:none">
-        <h3 style="margin-top:0">Confirmación de TEKIN</h3>
-        <div id="quiz-container">
-            </div>
+    <div id="step-quiz" style="display:none">
+        <h3 style="margin-top:0;">Validación Visual</h3>
+        <div id="img-ref"></div>
+        <div id="options" style="margin-top:15px;"></div>
     </div>
 </div>
 
-<div id="lock-screen" class="lock-screen">
-    <h1 style="font-size:50px">⚠️</h1>
-    <h2 id="lock-msg">INCIDENCIA DETECTADA</h2>
-    <p>Solicite desbloqueo a TL</p>
-    <input type="password" id="tl-pin" placeholder="PIN LÍDER" style="padding:15px; border-radius:10px; border:none; margin-bottom:15px; text-align:center; font-size:20px;">
-    <button onclick="desbloquear()" style="background:white; color:#e30613; padding:15px 40px; border-radius:10px; border:none; font-weight:bold;">DESBLOQUEAR</button>
+<div id="lock" class="lock">
+    <h1>⚠️ BLOQUEO</h1>
+    <p id="error-msg" style="padding:20px; text-align:center; font-weight:bold;"></p>
+    <input type="password" id="pin" placeholder="PIN LÍDER" style="padding:15px; border-radius:8px; border:none; margin-bottom:10px; text-align:center;">
+    <button onclick="location.reload()" style="background:white; color:red; padding:15px 30px; border-radius:8px; border:none; font-weight:bold;">REINTENTAR</button>
 </div>
 
 <script type="module">
@@ -65,119 +60,107 @@
         projectId: "logistica-ktmex",
         storageBucket: "logistica-ktmex.firebasestorage.app",
         messagingSenderId: "166597623735",
-        appId: "1:166597623735:web:c0f8d372bc1ee12d81b232",
-        measurementId: "G-CBPWQ5YQS4"
+        appId: "1:166597623735:web:c0f8d372bc1ee12d81b232"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let currentStep = 1;
-    let usuario = "";
-    let jamaitaSebango = "";
-    let cajaSebango = "";
-    let materialData = null;
+    let stage = 1; // 1: Jamaita, 2: Caja, 3: TTMX
+    let operator = "";
+    let jamaita = "";
+    let partData = null;
 
-    window.iniciarSesion = async () => {
-        usuario = document.getElementById('operador-id').value;
-        if (!usuario) return alert("Ingrese su nómina");
-        document.getElementById('view-login').style.display = 'none';
-        document.getElementById('view-workflow').style.display = 'block';
-        
+    window.startApp = async () => {
+        operator = document.getElementById('user').value;
+        if(!operator) return;
+        document.getElementById('step-login').style.display = 'none';
+        document.getElementById('step-scan').style.display = 'block';
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('video').srcObject = stream;
-        iniciarOCR();
+        runOCR();
     };
 
-    async function iniciarOCR() {
+    async function runOCR() {
         const video = document.getElementById('video');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        async function scan() {
-            if (currentStep > 3) return;
-            
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+        const loop = async () => {
+            if(stage > 3) return;
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
-
+            
             const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-            const matchSebango = text.match(/[KT]\d{3}/);
-            const matchM = text.match(/M\d{3,4}/);
+            
+            // RECONOCIMIENTO MEJORADO: K, T o P + dígitos
+            const foundJ = text.match(/[KTP]\d{3,4}/);
+            const foundM = text.match(/M\d{3,4}/);
 
-            if (currentStep === 1 && matchSebango) {
-                jamaitaSebango = matchSebango[0];
-                currentStep = 2;
-                actualizarUI("PASO 2", "Escanea KANBAN de Caja", `Jamaita OK: ${jamaitaSebango}`);
+            if (stage === 1 && foundJ) {
+                jamaita = foundJ[0];
+                stage = 2;
+                document.getElementById('instr').innerText = "Paso 2: Escanea CAJA";
+                document.getElementById('hint').innerText = `Jamaita OK: ${jamaita}`;
             } 
-            else if (currentStep === 2 && matchSebango) {
-                cajaSebango = matchSebango[0];
-                if (cajaSebango !== jamaitaSebango) {
-                    bloquear(`Error: Jamaita ${jamaitaSebango} vs Caja ${cajaSebango}`);
-                } else {
-                    currentStep = 3;
-                    actualizarUI("PASO 3", "Escanea Etiqueta TTMX (MXXX)", "Sincronía de Sebango OK");
-                }
+            else if (stage === 2 && foundJ) {
+                if (foundJ[0] !== jamaita) return stopAndLock(`Mezcla: Jamaita ${jamaita} vs Caja ${foundJ[0]}`);
+                stage = 3;
+                document.getElementById('instr').innerText = "Paso 3: Escanea TTMX (MXXX)";
             }
-            else if (currentStep === 3 && matchM) {
-                const docSnap = await getDoc(doc(db, "Maestro_Partes", matchM[0]));
-                if (docSnap.exists()) {
-                    materialData = docSnap.data();
-                    if (String(materialData.Sebango) !== cajaSebango) {
-                        bloquear(`Error Cruzado: Caja ${cajaSebango} vs Cliente ${materialData.Sebango}`);
+            else if (stage === 3 && foundM) {
+                const snap = await getDoc(doc(db, "Maestro_Partes", foundM[0]));
+                if (snap.exists()) {
+                    partData = snap.data();
+                    if (String(partData.Sebango) !== jamaita) {
+                        stopAndLock(`Error Cruzado: TTMX ${foundM[0]} exige Sebango ${partData.Sebango}`);
                     } else {
-                        lanzarQuiz();
+                        showQuiz();
                     }
                 }
             }
-            requestAnimationFrame(scan);
-        }
-        scan();
+            requestAnimationFrame(loop);
+        };
+        loop();
     }
 
-    function actualizarUI(step, instr, feedback) {
-        document.getElementById('step-label').innerText = step;
-        document.getElementById('instruction').innerText = instr;
-        document.getElementById('status-text').innerText = feedback;
-    }
-
-    function lanzarQuiz() {
-        currentStep = 4;
-        document.getElementById('view-workflow').style.display = 'none';
-        document.getElementById('view-quiz').style.display = 'block';
-        const container = document.getElementById('quiz-container');
+    function showQuiz() {
+        stage = 4;
+        document.getElementById('step-scan').style.display = 'none';
+        document.getElementById('step-quiz').style.display = 'block';
         
-        const opciones = [materialData.Tekin_OK, materialData.Tekin_NG].sort(() => Math.random() - 0.5);
-        container.innerHTML = `<p>Confirma el TEKIN para ${materialData.ID_Cliente}</p>`;
-        opciones.forEach(opt => {
-            container.innerHTML += `<button class="quiz-option" onclick="validarTekin('${opt}')">${opt}</button>`;
+        if(partData.img_url) {
+            document.getElementById('img-ref').innerHTML = `<img src="${partData.img_url}" style="width:100%; border-radius:10px;">`;
+        }
+        
+        const opts = [partData.Tekin_OK, partData.Tekin_NG].sort(() => Math.random() - 0.5);
+        const optDiv = document.getElementById('options');
+        optDiv.innerHTML = `<p>Selecciona el TEKIN para ${partData.ID_Cliente}</p>`;
+        opts.forEach(o => {
+            optDiv.innerHTML += `<button class="quiz-btn" onclick="checkTekin('${o}')">${o}</button>`;
         });
     }
 
-    window.validarTekin = async (ans) => {
-        if (ans === String(materialData.Tekin_OK)) {
-            await registrar("OK", materialData.ID_Cliente);
-            alert("¡Escaneo Correcto!");
+    window.checkTekin = async (val) => {
+        if(val === String(partData.Tekin_OK)) {
+            await log("OK", partData.ID_Cliente);
+            alert("Proceso Correcto");
             location.reload();
         } else {
-            bloquear(`Tekin Incorrecto: Seleccionó ${ans}, era ${materialData.Tekin_OK}`);
+            stopAndLock(`Tekin Incorrecto: Seleccionó ${val}`);
         }
     };
 
-    async function bloquear(motivo) {
-        document.getElementById('lock-msg').innerText = motivo;
-        document.getElementById('lock-screen').style.display = 'flex';
-        await registrar("BLOQUEO", materialData?.ID_Cliente || "N/A", motivo);
+    async function stopAndLock(msg) {
+        stage = 99;
+        document.getElementById('error-msg').innerText = msg;
+        document.getElementById('lock').style.display = 'flex';
+        await log("ERROR", partData?.ID_Cliente || "N/A", msg);
     }
 
-    window.desbloquear = () => {
-        if (document.getElementById('tl-pin').value === "1234") location.reload();
-        else alert("PIN de Líder incorrecto");
-    };
-
-    async function registrar(status, id, msg = "") {
+    async function log(st, id, msg = "") {
         await addDoc(collection(db, "Bitacora_Incidencias"), {
-            usuario, status, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
+            usuario: operator, status: st, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
         });
     }
 </script>
