@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KTMEX App B - Operativa</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #1a1a1a; color: white; }
+        .ui-layer { padding: 20px; text-align: center; }
+        #video-container { position: fixed; top: 0; left: 0; width: 100%; height: 60%; background: #000; z-index: -1; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .overlay { position: fixed; top: 15%; left: 10%; width: 80%; height: 30%; border: 3px solid #fabb00; border-radius: 10px; pointer-events: none; }
+        .controls { position: fixed; bottom: 0; width: 100%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; }
+        .btn { background: #e30613; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; font-size: 18px; }
+        .lock-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+    </style>
+</head>
+<body>
+
+<div id="video-container">
+    <video id="video" autoplay playsinline></video>
+    <div class="overlay"></div>
+</div>
+
+<div id="app-ui" class="controls">
+    <div id="login-view">
+        <h2 style="margin-top:0">Logística KTMEX</h2>
+        <input type="text" id="user-id" placeholder="Nómina" style="width:90%; padding:15px; margin-bottom:10px; border:1px solid #ddd; border-radius:8px;">
+        <button class="btn" id="btn-login">Iniciar Inspección</button>
+    </div>
+
+    <div id="scan-view" style="display:none">
+        <h3 id="instruction" style="color:#e30613">PASO 1: Escanea JAMAITA (KXXX)</h3>
+        <p id="feedback" style="font-size: 14px; color: #666;">Buscando código...</p>
+    </div>
+</div>
+
+<div id="lock-screen" class="lock-screen">
+    <h1>⚠️ BLOQUEO</h1>
+    <p id="lock-reason" style="padding:20px; text-align:center"></p>
+    <input type="password" id="tl-pin" placeholder="PIN LÍDER" style="padding:15px; border-radius:8px; border:none; margin-bottom:10px;">
+    <button onclick="unlockApp()" style="background:white; color:red; padding:15px 30px; border-radius:8px; border:none; font-weight:bold;">DESBLOQUEAR</button>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
+        authDomain: "logistica-ktmex.firebaseapp.com",
+        databaseURL: "https://logistica-ktmex-default-rtdb.firebaseio.com",
+        projectId: "logistica-ktmex",
+        storageBucket: "logistica-ktmex.firebasestorage.app",
+        messagingSenderId: "166597623735",
+        appId: "1:166597623735:web:c0f8d372bc1ee12d81b232",
+        measurementId: "G-CBPWQ5YQS4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let step = 1;
+    let user = "";
+    let jamaita = "";
+
+    document.getElementById('btn-login').addEventListener('click', () => {
+        user = document.getElementById('user-id').value;
+        if(!user) return alert("Ingresa tu nómina");
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('scan-view').style.display = 'block';
+        startCamera();
+    });
+
+    async function startCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('video').srcObject = stream;
+        scanLoop();
+    }
+
+    async function scanLoop() {
+        const video = document.getElementById('video');
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+        const matchK = text.match(/[KT]\d{3}/);
+        const matchM = text.match(/M\d{3,4}/);
+
+        if (step === 1 && matchK) {
+            jamaita = matchK[0];
+            step = 2;
+            document.getElementById('instruction').innerText = "PASO 2: Escanea CAJA (KXXX)";
+            document.getElementById('feedback').innerText = `Detectado Jamaita: ${jamaita}`;
+        } 
+        else if (step === 2 && matchK) {
+            if (matchK[0] !== jamaita) {
+                triggerLock(`Error: Jamaita era ${jamaita} y la Caja es ${matchK[0]}`);
+                return;
+            }
+            step = 3;
+            document.getElementById('instruction').innerText = "PASO 3: Escanea TTMX (MXXX)";
+        }
+        else if (step === 3 && matchM) {
+            // Verificación cruzada en Firebase
+            const docRef = doc(db, "Maestro_Partes", matchM[0]);
+            const docSnap = await getDoc(docRef);
+            
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.Sebango !== jamaita) {
+                    triggerLock(`Error Cross-Ref: TTMX ${matchM[0]} requiere Sebango ${data.Sebango}`);
+                } else {
+                    // Aquí iría el Quiz de Tekin (omitido por brevedad en este loop)
+                    await logAction("OK", matchM[0]);
+                    alert("¡Escaneo Correcto!");
+                    location.reload();
+                }
+            }
+        }
+        requestAnimationFrame(scanLoop);
+    }
+
+    async function logAction(status, mId, msg = "") {
+        await addDoc(collection(db, "Bitacora_Incidencias"), {
+            usuario: user,
+            timestamp: serverTimestamp(),
+            status: status,
+            customer_id: mId,
+            error_msg: msg
+        });
+    }
+
+    function triggerLock(reason) {
+        document.getElementById('lock-reason').innerText = reason;
+        document.getElementById('lock-screen').style.display = 'flex';
+        logAction("ERROR", "", reason);
+    }
+
+    window.unlockApp = () => {
+        if(document.getElementById('tl-pin').value === "1234") { // Cambiar por lógica de TL real
+            location.reload();
+        } else {
+            alert("PIN Incorrecto");
+        }
+    }
+</script>
+</body>
+</html>
