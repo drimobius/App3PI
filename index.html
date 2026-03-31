@@ -1,477 +1,170 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>KTMEX Poka-Yoke</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-<style>
-
-  body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
-
-  #camera-view { position: fixed; top: 0; width: 100%; height: 55%; background: #000; }
-
-  video { width: 100%; height: 100%; object-fit: cover; }
-
-  .reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 25%; border: 3px solid #fabb00; border-radius: 10px; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); pointer-events: none; }
-
-  .control-panel { position: fixed; bottom: 0; width: 100%; height: 45%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 25px; box-sizing: border-box; overflow-y: auto; }
-
-  .btn-red { background: #e30613; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; }
-
-  .btn-red:disabled { background: #aaa; cursor: not-allowed; }
-
-  .lock-overlay { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; text-align: center; }
-
-  .quiz-opt { background: #f1f5f9; border: 2px solid #cbd5e0; padding: 15px; width: 100%; margin-bottom: 10px; border-radius: 10px; font-weight: bold; font-size: 18px; color: #1a202c; cursor: pointer; box-sizing: border-box; }
-
-  .quiz-opt:active { background: #e2e8f0; }
-
-  .success-overlay { position: fixed; top: 0; width: 100%; height: 100%; background: #276749; z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-
-  #ocr-status { font-size: 12px; color: #a0aec0; margin-top: 6px; min-height: 16px; }
-
-  #cam-error { color: #e30613; font-size: 14px; margin-top: 10px; display: none; }
-
-  #pin-feedback { color: #fff; font-size: 13px; margin-top: 8px; min-height: 18px; }
- 
-  /* Sin imagen: placeholder */
-
-  .no-img-placeholder { background: #edf2f7; border-radius: 12px; padding: 20px; color: #718096; font-size: 13px; text-align: center; margin-bottom: 15px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KTMEX Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; background: #000; color: white; }
+        #video { width: 100%; height: 50vh; object-fit: cover; }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 50vh; background: white; color: #333; padding: 20px; border-radius: 20px 20px 0 0; box-sizing: border-box; }
+        .feedback-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .btn-next { background: #1a1c2c; color: white; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; margin-top: 15px; }
+        .lock-ui { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 3000; display: none; padding: 40px; box-sizing: border-box; text-align: center; }
+    </style>
 </head>
 <body>
- 
-<div id="camera-view">
-<video id="webcam" autoplay playsinline></video>
-<div class="reticle"></div>
+
+<video id="video" autoplay playsinline></video>
+
+<div class="panel">
+    <div id="ui-login">
+        <h2 style="color:#e30613">Acceso KTMEX</h2>
+        <input type="text" id="nomina" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:10px;">
+        <input type="password" id="pin" placeholder="PIN" style="width:100%; padding:15px; margin-bottom:15px;">
+        <button class="btn-next" onclick="login()">Ingresar</button>
+    </div>
+
+    <div id="ui-scan" style="display:none">
+        <h2 id="step-title">PASO 1</h2>
+        <p id="step-instr">Enfoca el JAMAITA</p>
+        <div id="scan-data" style="font-weight:bold; color:#e30613; font-size:24px; text-align:center; padding:20px;">---</div>
+        <button id="btn-continue" class="btn-next" style="display:none" onclick="resumeScan()">CONTINUAR A SIGUIENTE PASO</button>
+    </div>
 </div>
- 
-<div class="control-panel">
- 
-  <!-- LOGIN -->
-<div id="ui-login">
-<h2 style="margin:0 0 15px 0; color:#e30613;">Poka-Yoke KTMEX</h2>
-<input type="text" id="nom-input" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:15px; border:1px solid #ddd; border-radius:10px; box-sizing:border-box;">
-<button class="btn-red" id="btn-iniciar" onclick="window.initApp()">Iniciar Escaneo</button>
-<div id="cam-error">❌ No se pudo acceder a la cámara. Verifica los permisos e intenta de nuevo.</div>
+
+<div id="feedback-correct" class="feedback-screen" style="background:#27ae60">
+    <h1 style="font-size:100px">✅</h1>
+    <h2>LECTURA CORRECTA</h2>
 </div>
- 
-  <!-- WORKFLOW -->
-<div id="ui-workflow" style="display:none">
-<h3 id="instr-text" style="margin-top:0;">PASO 1: Escanea JAMAITA</h3>
-<p id="feedback" style="color:#718096; font-size:14px;">Buscando código (K, T o P)...</p>
-<div id="ocr-status"></div>
+<div id="feedback-wrong" class="feedback-screen" style="background:#e30613">
+    <h1 style="font-size:100px">❌</h1>
+    <h2>LECTURA INCORRECTA</h2>
 </div>
- 
-  <!-- QUIZ JIDOKA -->
-<div id="ui-quiz" style="display:none; text-align:center;">
-<h3 style="margin-top:0;">Referencia Visual</h3>
-<!-- MODIFICADO: muestra img_b64 en lugar de img_url -->
-<div id="photo-ref" style="margin-bottom:15px;"></div>
-<div id="quiz-btns"></div>
+
+<div id="lock" class="lock-ui">
+    <h1>⚠️ BLOQUEO</h1>
+    <p id="lock-text" style="font-size:18px; margin-bottom:30px;"></p>
+    <input type="password" id="pin-tl" placeholder="PIN LÍDER PARA DESBLOQUEAR" style="width:100%; padding:15px; margin-bottom:10px; text-align:center;">
+    <button class="btn-next" style="background:white; color:red" onclick="unlock()">VALIDAR LÍDER</button>
 </div>
- 
-</div>
- 
-<!-- LOCK -->
-<div id="lock" class="lock-overlay">
-<h1 style="font-size:60px;">🛑</h1>
-<h2 id="lock-reason">ERROR DETECTADO</h2>
-<p>Solicitar desbloqueo de Líder (TL)</p>
-<input type="password" id="pin-tl" placeholder="PIN" style="padding:15px; border-radius:10px; border:none; margin-bottom:10px; text-align:center; font-size:24px; width:180px;">
-<div id="pin-feedback"></div>
-<button onclick="window.verificarPin()" style="background:white; color:red; padding:15px 40px; border-radius:10px; border:none; font-weight:bold; margin-top:10px; cursor:pointer;">DESBLOQUEAR</button>
-</div>
- 
-<!-- SUCCESS -->
-<div id="success-screen" class="success-overlay">
-<h1 style="font-size:60px;">✅</h1>
-<h2>¡Escaneo Validado!</h2>
-<p style="font-size:14px; opacity:0.85;">Reiniciando en 3 segundos...</p>
-</div>
- 
+
 <script type="module">
-
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-
-  import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
- 
-  const firebaseConfig = {
-
-    apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
-
-    authDomain: "logistica-ktmex.firebaseapp.com",
-
-    projectId: "logistica-ktmex",
-
-    storageBucket: "logistica-ktmex.firebasestorage.app",
-
-    messagingSenderId: "166597623735",
-
-    appId: "1:166597623735:web:c0f8d372bc1ee12d81b232"
-
-  };
- 
-  const app = initializeApp(firebaseConfig);
-
-  const db  = getFirestore(app);
- 
-  const PIN_TL = "1234";
- 
-  let step          = 1;
-
-  let userNom       = "";
-
-  let jCode         = "";
-
-  let dataM         = null;
-
-  let scannerActive = false;
-
-  let ocrRunning    = false;
- 
-  // ─── initApp ────────────────────────────────────────────────────────────────
-
-  window.initApp = async () => {
-
-    const nomInput = document.getElementById('nom-input');
-
-    const camError = document.getElementById('cam-error');
-
-    const btnInic  = document.getElementById('btn-iniciar');
- 
-    userNom = nomInput.value.trim();
-
-    if (!userNom) {
-
-      nomInput.style.borderColor = '#e30613';
-
-      nomInput.placeholder = 'Ingresa tu nómina';
-
-      return;
-
-    }
-
-    nomInput.style.borderColor = '#ddd';
-
-    btnInic.disabled = true;
-
-    btnInic.textContent = 'Iniciando cámara...';
-
-    camError.style.display = 'none';
- 
-    try {
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-
-      document.getElementById('webcam').srcObject = stream;
-
-      document.getElementById('ui-login').style.display    = 'none';
-
-      document.getElementById('ui-workflow').style.display = 'block';
-
-      scannerActive = true;
-
-      runScanner();
-
-    } catch (err) {
-
-      btnInic.disabled = false;
-
-      btnInic.textContent = 'Iniciar Escaneo';
-
-      camError.style.display = 'block';
-
-      console.error('Error de cámara:', err);
-
-    }
-
-  };
- 
-  // ─── Scanner OCR ────────────────────────────────────────────────────────────
-
-  async function runScanner() {
-
-    const video     = document.getElementById('webcam');
-
-    const canvas    = document.createElement('canvas');
-
-    const ctx       = canvas.getContext('2d');
-
-    const ocrStatus = document.getElementById('ocr-status');
- 
-    const loop = async () => {
-
-      if (!scannerActive) return;
-
-      if (ocrRunning) { requestAnimationFrame(loop); return; }
-
-      if (video.videoWidth === 0 || video.videoHeight === 0) { requestAnimationFrame(loop); return; }
- 
-      ocrRunning = true;
-
-      ocrStatus.textContent = '🔍 Analizando...';
-
-      canvas.width  = video.videoWidth;
-
-      canvas.height = video.videoHeight;
-
-      ctx.drawImage(video, 0, 0);
- 
-      try {
-
-        const ocrPromise = Tesseract.recognize(canvas, 'eng');
-
-        const timeout    = new Promise((_, reject) => setTimeout(() => reject(new Error('OCR timeout')), 4000));
-
-        const { data: { text } } = await Promise.race([ocrPromise, timeout]);
- 
-        const raw    = text.replace(/\s/g, '').toUpperCase();
-
-        const matchJ = raw.match(/[KTP]\d{3,4}/);
-
-        const matchM = raw.match(/M\d{3,4}/);
- 
-        ocrStatus.textContent = '';
- 
-        if (step === 1 && matchJ) {
-
-          jCode = matchJ[0];
-
-          step  = 2;
-
-          document.getElementById('instr-text').innerText = "PASO 2: Escanea CAJA";
-
-          document.getElementById('feedback').innerText   = `✅ Jamaita OK: ${jCode}`;
- 
-        } else if (step === 2 && matchJ) {
-
-          if (matchJ[0] !== jCode) return lockOut(`Mezcla: Jamaita era ${jCode} pero detecté ${matchJ[0]}`);
-
-          step = 3;
-
-          document.getElementById('instr-text').innerText = "PASO 3: Escanea TTMX (MXXX)";
-
-          document.getElementById('feedback').innerText   = "✅ Sincronía de Sebango Correcta";
- 
-        } else if (step === 3 && matchM) {
-
-          const snap = await getDoc(doc(db, "Maestro_Partes", matchM[0]));
-
-          if (snap.exists()) {
-
-            dataM = snap.data();
-
-            if (String(dataM.Sebango).toUpperCase() !== jCode) {
-
-              lockOut(`Error Cruzado: ${matchM[0]} requiere Sebango ${dataM.Sebango}`);
-
-            } else {
-
-              showJidoka();
-
-            }
-
-          } else {
-
-            document.getElementById('feedback').innerText = `⚠️ ${matchM[0]} no encontrado en Maestro`;
-
-          }
-
-        }
- 
-      } catch (err) {
-
-        ocrStatus.textContent = '';
-
-        console.warn('OCR error:', err.message);
-
-      }
- 
-      ocrRunning = false;
-
-      requestAnimationFrame(loop);
-
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = { /* Mismos datos App A */ };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let stage = 1;
+    let scanActive = false;
+    let operator = null;
+    let jamaita = "";
+
+    window.login = async () => {
+        const nom = document.getElementById('nomina').value;
+        const pin = document.getElementById('pin').value;
+        const uSnap = await getDoc(doc(db, "Usuarios", nom));
+        
+        if(uSnap.exists() && uSnap.data().pin === pin) {
+            operator = uSnap.data();
+            document.getElementById('ui-login').style.display = 'none';
+            document.getElementById('ui-scan').style.display = 'block';
+            startCamera();
+        } else { alert("Nómina o PIN incorrectos"); }
     };
- 
-    loop();
 
-  }
- 
-  // ─── JIDOKA — MODIFICADO: usa img_b64 en lugar de img_url ─────────────────
-
-  function showJidoka() {
-
-    scannerActive = false;
-
-    step = 4;
- 
-    document.getElementById('ui-workflow').style.display = 'none';
-
-    document.getElementById('ui-quiz').style.display     = 'block';
- 
-    const photoRef = document.getElementById('photo-ref');
- 
-    // MODIFICADO: Lee img_b64 (Base64 guardado desde App A)
-
-    // También mantiene compatibilidad con img_url por si existen registros antiguos
-
-    if (dataM.img_b64) {
-
-      // Imagen desde Base64 en Firestore — funciona sin Firebase Storage
-
-      photoRef.innerHTML = `<img src="${dataM.img_b64}"
-
-        style="width:100%; max-height:180px; border-radius:12px; object-fit:contain;"
-
-        alt="Referencia ${dataM.ID_Cliente}">`;
- 
-    } else if (dataM.img_url) {
-
-      // Compatibilidad con registros anteriores que usaban Storage
-
-      photoRef.innerHTML = `<img src="${dataM.img_url}"
-
-        style="width:100%; max-height:180px; border-radius:12px; object-fit:contain;"
-
-        alt="Referencia ${dataM.ID_Cliente}">`;
- 
-    } else {
-
-      // Sin imagen disponible — placeholder informativo
-
-      photoRef.innerHTML = `<div class="no-img-placeholder">
-
-        📷 Sin imagen de referencia para <b>${dataM.ID_Cliente}</b><br>
-<small>Cárgala desde el Dashboard (App A)</small>
-</div>`;
-
+    async function startCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('video').srcObject = stream;
+        scanActive = true;
+        ocrLoop();
     }
- 
-    // Validar que ambas opciones del quiz existan
 
-    const tekinOK = dataM.Tekin_OK;
+    async function ocrLoop() {
+        if(!scanActive) return;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 400; canvas.height = 300;
+        canvas.getContext('2d').drawImage(document.getElementById('video'), 0, 0, 400, 300);
+        
+        const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+        const raw = text.replace(/\s/g, '').toUpperCase();
+        
+        const matchJ = raw.match(/[KTP]\d{3}/);
+        const matchM = raw.match(/M\d{3,4}/);
 
-    const tekinNG = dataM.Tekin_NG;
- 
-    if (!tekinOK || !tekinNG) {
+        if(stage === 1 && matchJ) processStep(matchJ[0]);
+        else if(stage === 2 && matchJ) processStep(matchJ[0]);
+        else if(stage === 3 && matchM) processStep(matchM[0]);
 
-      document.getElementById('quiz-btns').innerHTML =
-
-        `<p style="color:#e30613;">⚠️ Datos de Tekin incompletos para ${dataM.ID_Cliente}. Contacta al TL.</p>`;
-
-      lockOut(`Tekin sin configurar para ${dataM.ID_Cliente}`);
-
-      return;
-
+        if(scanActive) requestAnimationFrame(ocrLoop);
     }
- 
-    const opts   = [String(tekinOK), String(tekinNG)].sort(() => Math.random() - 0.5);
 
-    const btnBox = document.getElementById('quiz-btns');
- 
-    btnBox.innerHTML = `<p style="margin-bottom:15px; font-weight:bold;">¿Cuál es el TEKIN de ${dataM.ID_Cliente}?</p>`;
- 
-    opts.forEach(o => {
-
-      const b = document.createElement('button');
-
-      b.className = 'quiz-opt';
-
-      b.innerText = o;
-
-      b.onclick = () => {
-
-        btnBox.querySelectorAll('button').forEach(btn => btn.disabled = true);
-
-        if (o === String(tekinOK)) {
-
-          logEv("OK", dataM.ID_Cliente);
-
-          const success = document.getElementById('success-screen');
-
-          success.style.display = 'flex';
-
-          setTimeout(() => location.reload(), 3000);
-
-        } else {
-
-          lockOut(`Tekin Incorrecto para ${dataM.ID_Cliente}`);
-
+    function processStep(val) {
+        scanActive = false; // PAUSA EL ESCANEO
+        document.getElementById('scan-data').innerText = val;
+        
+        if(stage === 1) {
+            jamaita = val;
+            showFeedback(true);
+        } else if (stage === 2) {
+            if(val === jamaita) showFeedback(true);
+            else showFeedback(false, `Mezcla: Jamaita era ${jamaita} vs Caja ${val}`);
+        } else if (stage === 3) {
+            validateM(val);
         }
-
-      };
-
-      btnBox.appendChild(b);
-
-    });
-
-  }
- 
-  // ─── lockOut ────────────────────────────────────────────────────────────────
-
-  async function lockOut(msg) {
-
-    scannerActive = false;
-
-    step = 99;
-
-    document.getElementById('lock-reason').innerText = msg;
-
-    document.getElementById('lock').style.display    = 'flex';
-
-    await logEv("ERROR", dataM?.ID_Cliente ?? "N/A", msg);
-
-  }
- 
-  // ─── PIN TL ─────────────────────────────────────────────────────────────────
-
-  window.verificarPin = () => {
-
-    const pin         = document.getElementById('pin-tl').value;
-
-    const pinFeedback = document.getElementById('pin-feedback');
-
-    if (!pin) { pinFeedback.textContent = '⚠️ Ingresa el PIN'; return; }
-
-    if (pin === PIN_TL) {
-
-      pinFeedback.textContent = '✅ PIN correcto. Reiniciando...';
-
-      setTimeout(() => location.reload(), 1000);
-
-    } else {
-
-      pinFeedback.textContent = '❌ PIN incorrecto. Inténtalo de nuevo.';
-
-      document.getElementById('pin-tl').value = '';
-
     }
 
-  };
- 
-  // ─── Bitácora ────────────────────────────────────────────────────────────────
-
-  async function logEv(st, id, msg = "") {
-
-    try {
-
-      await addDoc(collection(db, "Bitacora_Incidencias"), {
-
-        usuario: userNom, status: st, customer_id: id, error_msg: msg, timestamp: serverTimestamp()
-
-      });
-
-    } catch (err) {
-
-      console.error('Error al registrar bitácora:', err);
-
+    function showFeedback(isOk, msg = "") {
+        const screen = isOk ? 'feedback-correct' : 'feedback-wrong';
+        document.getElementById(screen).style.display = 'flex';
+        
+        setTimeout(() => {
+            document.getElementById(screen).style.display = 'none';
+            if(isOk) {
+                document.getElementById('btn-continue').style.display = 'block';
+            } else {
+                triggerLock(msg);
+            }
+        }, 1500);
     }
 
-  }
+    window.resumeScan = () => {
+        stage++;
+        document.getElementById('btn-continue').style.display = 'none';
+        document.getElementById('scan-data').innerText = "---";
+        if(stage === 2) document.getElementById('step-instr').innerText = "Escanea CAJA";
+        if(stage === 3) document.getElementById('step-instr').innerText = "Escanea TTMX";
+        scanActive = true;
+        ocrLoop();
+    };
+
+    async function validateM(mId) {
+        const snap = await getDoc(doc(db, "Maestro_Partes", mId));
+        if(snap.exists() && String(snap.data().Sebango) === jamaita) {
+            showFeedback(true);
+            // Lógica final de Quiz...
+        } else {
+            showFeedback(false, `Error Cruzado: ${mId} no pertenece a ${jamaita}`);
+        }
+    }
+
+    function triggerLock(reason) {
+        document.getElementById('lock-text').innerText = reason;
+        document.getElementById('lock').style.display = 'block';
+    }
+
+    window.unlock = async () => {
+        const pin = document.getElementById('pin-tl').value;
+        // Busca cualquier usuario de nivel Lider con ese PIN
+        const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", pin));
+        const snap = await getDocs(q);
+        if(!snap.empty) location.reload();
+        else alert("PIN de Líder incorrecto");
+    };
 </script>
 </body>
 </html>
-
- 
