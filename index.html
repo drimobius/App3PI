@@ -3,168 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX Scanner</title>
+    <title>KTMEX Poka-Yoke</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #000; color: white; }
-        #video { width: 100%; height: 50vh; object-fit: cover; }
-        .panel { position: fixed; bottom: 0; width: 100%; height: 50vh; background: white; color: #333; padding: 20px; border-radius: 20px 20px 0 0; box-sizing: border-box; }
-        .feedback-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .btn-next { background: #1a1c2c; color: white; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; margin-top: 15px; }
-        .lock-ui { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 3000; display: none; padding: 40px; box-sizing: border-box; text-align: center; }
+        body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
+        video { width: 100%; height: 50%; object-fit: cover; }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 50%; background: white; color: #333; border-radius: 20px 20px 0 0; padding: 25px; box-sizing: border-box; }
+        .btn-next { background: #1a1c2c; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; }
+        .status-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; }
+        .lock-screen { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
+        input { width: 100%; padding: 15px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
     </style>
 </head>
 <body>
 
-<video id="video" autoplay playsinline></video>
+<video id="webcam" autoplay playsinline></video>
 
 <div class="panel">
     <div id="ui-login">
-        <h2 style="color:#e30613">Acceso KTMEX</h2>
-        <input type="text" id="nomina" placeholder="Nómina" style="width:100%; padding:15px; margin-bottom:10px;">
-        <input type="password" id="pin" placeholder="PIN" style="width:100%; padding:15px; margin-bottom:15px;">
-        <button class="btn-next" onclick="login()">Ingresar</button>
+        <h2 style="color:#e30613; margin-top:0;">Acceso KTMEX</h2>
+        <input type="text" id="nom-input" placeholder="Nómina">
+        <div id="pin-box" style="display:none;">
+            <input type="password" id="pin-input" placeholder="Introduce tu PIN">
+        </div>
+        <button class="btn-next" onclick="handleLogin()">Siguiente</button>
     </div>
 
-    <div id="ui-scan" style="display:none">
-        <h2 id="step-title">PASO 1</h2>
-        <p id="step-instr">Enfoca el JAMAITA</p>
-        <div id="scan-data" style="font-weight:bold; color:#e30613; font-size:24px; text-align:center; padding:20px;">---</div>
-        <button id="btn-continue" class="btn-next" style="display:none" onclick="resumeScan()">CONTINUAR A SIGUIENTE PASO</button>
+    <div id="ui-scan" style="display:none;">
+        <h3 id="step-label">PASO 1: JAMAITA</h3>
+        <p id="step-hint" style="color:#666;">Buscando código...</p>
+        <div id="match-val" style="font-size:28px; font-weight:bold; color:#e30613; text-align:center; padding:15px;">---</div>
+        <button id="btn-resume" class="btn-next" style="display:none; background:#27ae60;" onclick="resumeWorkflow()">CONTINUAR</button>
     </div>
 </div>
 
-<div id="feedback-correct" class="feedback-screen" style="background:#27ae60">
-    <h1 style="font-size:100px">✅</h1>
-    <h2>LECTURA CORRECTA</h2>
-</div>
-<div id="feedback-wrong" class="feedback-screen" style="background:#e30613">
-    <h1 style="font-size:100px">❌</h1>
-    <h2>LECTURA INCORRECTA</h2>
-</div>
+<div id="overlay-ok" class="status-overlay" style="background:rgba(39, 174, 96, 0.95);">✅ CORRECTO</div>
+<div id="overlay-ng" class="status-overlay" style="background:rgba(227, 6, 19, 0.95);">❌ INCORRECTO</div>
 
-<div id="lock" class="lock-ui">
-    <h1>⚠️ BLOQUEO</h1>
-    <p id="lock-text" style="font-size:18px; margin-bottom:30px;"></p>
-    <input type="password" id="pin-tl" placeholder="PIN LÍDER PARA DESBLOQUEAR" style="width:100%; padding:15px; margin-bottom:10px; text-align:center;">
-    <button class="btn-next" style="background:white; color:red" onclick="unlock()">VALIDAR LÍDER</button>
+<div id="lock" class="lock-screen">
+    <h1 style="font-size:60px;">🛑</h1>
+    <h2>DISPOSITIVO BLOQUEADO</h2>
+    <p id="lock-msg" style="margin-bottom:20px;"></p>
+    <input type="password" id="pin-tl" placeholder="PIN DE LÍDER" style="text-align:center;">
+    <button class="btn-next" style="background:white; color:red;" onclick="validateUnlock()">DESBLOQUEAR</button>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
     const firebaseConfig = { /* Mismos datos App A */ };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let stage = 1;
-    let scanActive = false;
-    let operator = null;
+    let step = 1;
+    let user = null;
+    let isPaused = false;
     let jamaita = "";
+    let partData = null;
 
-    window.login = async () => {
-        const nom = document.getElementById('nomina').value;
-        const pin = document.getElementById('pin').value;
-        const uSnap = await getDoc(doc(db, "Usuarios", nom));
-        
-        if(uSnap.exists() && uSnap.data().pin === pin) {
-            operator = uSnap.data();
-            document.getElementById('ui-login').style.display = 'none';
-            document.getElementById('ui-scan').style.display = 'block';
-            startCamera();
-        } else { alert("Nómina o PIN incorrectos"); }
+    // Login Condicional
+    window.handleLogin = async () => {
+        const nom = document.getElementById('nom-input').value;
+        const pin = document.getElementById('pin-input').value;
+        const snap = await getDoc(doc(db, "Usuarios", nom));
+
+        if(!snap.exists()) return alert("Nómina no registrada");
+        const u = snap.data();
+
+        if(u.nivel === "Operador") {
+            startSession(u);
+        } else {
+            document.getElementById('pin-box').style.display = 'block';
+            if(pin === u.pin) startSession(u);
+            else if(pin !== "") alert("PIN Incorrecto");
+        }
     };
 
-    async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        document.getElementById('video').srcObject = stream;
-        scanActive = true;
-        ocrLoop();
+    function startSession(u) {
+        user = u;
+        document.getElementById('ui-login').style.display = 'none';
+        document.getElementById('ui-scan').style.display = 'block';
+        initCamera();
     }
 
-    async function ocrLoop() {
-        if(!scanActive) return;
+    async function initCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('webcam').srcObject = stream;
+        runOCR();
+    }
+
+    async function runOCR() {
+        if(isPaused || step > 3) return;
         
         const canvas = document.createElement('canvas');
         canvas.width = 400; canvas.height = 300;
-        canvas.getContext('2d').drawImage(document.getElementById('video'), 0, 0, 400, 300);
+        canvas.getContext('2d').drawImage(document.getElementById('webcam'), 0, 0, 400, 300);
         
         const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
         const raw = text.replace(/\s/g, '').toUpperCase();
         
-        const matchJ = raw.match(/[KTP]\d{3}/);
-        const matchM = raw.match(/M\d{3,4}/);
+        const mJ = raw.match(/[KTP]\d{3}/);
+        const mM = raw.match(/M\d{3,4}/);
 
-        if(stage === 1 && matchJ) processStep(matchJ[0]);
-        else if(stage === 2 && matchJ) processStep(matchJ[0]);
-        else if(stage === 3 && matchM) processStep(matchM[0]);
+        if(step === 1 && mJ) handleMatch(mJ[0]);
+        else if(step === 2 && mJ) handleMatch(mJ[0]);
+        else if(step === 3 && mM) handleMatch(mM[0]);
 
-        if(scanActive) requestAnimationFrame(ocrLoop);
+        requestAnimationFrame(runOCR);
     }
 
-    function processStep(val) {
-        scanActive = false; // PAUSA EL ESCANEO
-        document.getElementById('scan-data').innerText = val;
-        
-        if(stage === 1) {
+    function handleMatch(val) {
+        isPaused = true;
+        document.getElementById('match-val').innerText = val;
+
+        if(step === 1) {
             jamaita = val;
-            showFeedback(true);
-        } else if (stage === 2) {
-            if(val === jamaita) showFeedback(true);
-            else showFeedback(false, `Mezcla: Jamaita era ${jamaita} vs Caja ${val}`);
-        } else if (stage === 3) {
-            validateM(val);
+            flashStatus(true);
+        } else if(step === 2) {
+            if(val === jamaita) flashStatus(true);
+            else flashStatus(false, `Mezcla: Jamaita era ${jamaita} y Caja es ${val}`);
+        } else if(step === 3) {
+            checkFinal(val);
         }
     }
 
-    function showFeedback(isOk, msg = "") {
-        const screen = isOk ? 'feedback-correct' : 'feedback-wrong';
-        document.getElementById(screen).style.display = 'flex';
-        
+    function flashStatus(ok, msg = "") {
+        const id = ok ? 'overlay-ok' : 'overlay-ng';
+        document.getElementById(id).style.display = 'flex';
         setTimeout(() => {
-            document.getElementById(screen).style.display = 'none';
-            if(isOk) {
-                document.getElementById('btn-continue').style.display = 'block';
-            } else {
-                triggerLock(msg);
-            }
+            document.getElementById(id).style.display = 'none';
+            if(ok) document.getElementById('btn-resume').style.display = 'block';
+            else triggerLock(msg);
         }, 1500);
     }
 
-    window.resumeScan = () => {
-        stage++;
-        document.getElementById('btn-continue').style.display = 'none';
-        document.getElementById('scan-data').innerText = "---";
-        if(stage === 2) document.getElementById('step-instr').innerText = "Escanea CAJA";
-        if(stage === 3) document.getElementById('step-instr').innerText = "Escanea TTMX";
-        scanActive = true;
-        ocrLoop();
+    window.resumeWorkflow = () => {
+        step++;
+        isPaused = false;
+        document.getElementById('btn-resume').style.display = 'none';
+        document.getElementById('match-val').innerText = "---";
+        if(step === 2) document.getElementById('step-label').innerText = "PASO 2: CAJA";
+        if(step === 3) document.getElementById('step-label').innerText = "PASO 3: TTMX";
+        runOCR();
     };
 
-    async function validateM(mId) {
+    async function checkFinal(mId) {
         const snap = await getDoc(doc(db, "Maestro_Partes", mId));
         if(snap.exists() && String(snap.data().Sebango) === jamaita) {
-            showFeedback(true);
-            // Lógica final de Quiz...
-        } else {
-            showFeedback(false, `Error Cruzado: ${mId} no pertenece a ${jamaita}`);
-        }
+            partData = snap.data();
+            flashStatus(true);
+            // Aquí iría el Quiz de Tekin...
+        } else { flashStatus(false, `Error Cruzado: ${mId} no es para ${jamaita}`); }
     }
 
-    function triggerLock(reason) {
-        document.getElementById('lock-text').innerText = reason;
-        document.getElementById('lock').style.display = 'block';
+    function triggerLock(txt) {
+        document.getElementById('lock-msg').innerText = txt;
+        document.getElementById('lock').style.display = 'flex';
+        logEvent("ERROR", jamaita, txt);
     }
 
-    window.unlock = async () => {
+    window.validateUnlock = async () => {
         const pin = document.getElementById('pin-tl').value;
-        // Busca cualquier usuario de nivel Lider con ese PIN
         const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", pin));
         const snap = await getDocs(q);
         if(!snap.empty) location.reload();
-        else alert("PIN de Líder incorrecto");
+        else alert("PIN de Líder Incorrecto");
     };
+
+    async function logEvent(st, id, err = "") {
+        await addDoc(collection(db, "Bitacora_Incidencias"), {
+            usuario: user.nombre, status: st, customer_id: id, error_msg: err, timestamp: serverTimestamp()
+        });
+    }
 </script>
 </body>
 </html>
