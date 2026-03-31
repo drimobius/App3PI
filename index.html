@@ -8,14 +8,13 @@
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
         video { width: 100%; height: 50%; object-fit: cover; border-bottom: 4px solid #e30613; }
-        .panel { position: fixed; bottom: 0; width: 100%; height: 50%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 25px; box-sizing: border-box; box-shadow: 0 -5px 15px rgba(0,0,0,0.3); }
-        .btn-next { background: #1a1c2c; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; transition: 0.2s; }
-        .btn-next:active { transform: scale(0.98); background: #2d2f45; }
-        .status-overlay { position: fixed; top: 0; width: 100%; height: 100%; z-index: 2000; display: none; align-items: center; justify-content: center; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 50%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 25px; box-sizing: border-box; }
+        .btn-next { background: #1a1c2c; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; }
+        .btn-retry { background: #f39c12; color: white; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 10px; display: none; }
+        .status-overlay { position: fixed; top: 0; width: 100%; height: 100%; z-index: 2000; display: none; align-items: center; justify-content: center; font-size: 35px; font-weight: bold; text-align: center; padding: 20px; box-sizing: border-box; }
         .lock-ui { position: fixed; top: 0; width: 100%; height: 100%; background: #e30613; z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
-        input { width: 100%; padding: 16px; margin-bottom: 12px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; outline: none; }
-        input:focus { border-color: #e30613; }
-        #res-val { font-size: 35px; font-weight: 800; color: #e30613; text-align: center; padding: 15px; background: #fff5f5; border-radius: 15px; margin: 10px 0; border: 2px dashed #e30613; }
+        input { width: 100%; padding: 16px; margin-bottom: 12px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        #res-val { font-size: 32px; font-weight: 800; color: #e30613; text-align: center; padding: 10px; background: #fff5f5; border-radius: 15px; border: 2px dashed #e30613; }
     </style>
 </head>
 <body>
@@ -24,31 +23,28 @@
 
 <div class="panel">
     <div id="ui-login">
-        <h2 style="color:#e30613; margin-top:0; font-size: 24px;">Acceso KTMEX</h2>
+        <h2 style="color:#e30613; margin-top:0;">Acceso KTMEX</h2>
         <input type="text" id="nom-input" placeholder="Nómina">
-        <div id="pin-box" style="display:none;">
-            <input type="password" id="pin-input" placeholder="PIN de Seguridad (Líder)">
-        </div>
-        <button class="btn-next" onclick="checkLogin()">INGRESAR AL SISTEMA</button>
+        <div id="pin-box" style="display:none;"><input type="password" id="pin-input" placeholder="PIN Líder"></div>
+        <button class="btn-next" onclick="checkLogin()">INGRESAR</button>
     </div>
 
     <div id="ui-scan" style="display:none;">
-        <h3 id="step-txt" style="margin-bottom: 5px;">PASO 1: ESCANEAR JAMAITA</h3>
-        <p id="hint" style="font-size: 13px; color: #666; margin: 0 0 10px 0;">Busca códigos T, K o P</p>
+        <h3 id="step-txt">PASO 1: ESCANEAR JAMAITA</h3>
         <div id="res-val">---</div>
-        <button id="btn-res" class="btn-next" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR OPERACIÓN</button>
+        <button id="btn-res" class="btn-next" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
+        <button id="btn-retry-ui" class="btn-retry" onclick="retryScan()">🔄 REPETIR ESCANEO</button>
     </div>
 </div>
 
-<div id="ok-msg" class="status-overlay" style="background:rgba(39,174,96,0.95); color: white;">✅ LECTURA OK</div>
-<div id="ng-msg" class="status-overlay" style="background:rgba(227,6,19,0.95); color: white;">❌ ERROR DE CARGA</div>
+<div id="ok-msg" class="status-overlay" style="background:rgba(39,174,96,0.95);">✅ LECTURA OK</div>
+<div id="ng-msg" class="status-overlay" style="background:rgba(211, 47, 47, 0.95);">❌ ERROR DE VALIDACIÓN</div>
 
 <div id="lock" class="lock-ui">
-    <h1 style="font-size:80px; margin: 0;">🛑</h1>
-    <h2 id="lock-reason" style="font-size: 24px;">DISPOSITIVO BLOQUEADO</h2>
-    <p style="color: white; margin-bottom: 30px;">Se requiere validación de Líder PC para continuar.</p>
-    <input type="password" id="pin-tl" placeholder="PIN DEL LÍDER" style="text-align:center; font-size: 20px;">
-    <button class="btn-next" style="background:white; color:#e30613; height: 70px;" onclick="unlock()">VALIDAR Y DESBLOQUEAR</button>
+    <h1 style="font-size:60px; margin:0;">🛑</h1>
+    <h2 id="lock-reason">MEZCLA DETECTADA</h2>
+    <input type="password" id="pin-tl" placeholder="PIN LÍDER" style="text-align:center;">
+    <button class="btn-next" style="background:white; color:#e30613;" onclick="unlock()">DESBLOQUEAR</button>
 </div>
 
 <script type="module">
@@ -67,63 +63,43 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let user = null; 
-    let step = 1; 
-    let jamaita = ""; 
-    let paused = false;
+    let user = null; let step = 1; let jamaita = ""; let paused = false;
 
-    // Login Condicional (Operador sin PIN / Líder con PIN)
     window.checkLogin = async () => {
         const nom = document.getElementById('nom-input').value;
         const pin = document.getElementById('pin-input').value;
         const s = await getDoc(doc(db, "Usuarios", nom));
-        
-        if(!s.exists()) return alert("Nómina no encontrada en base de datos.");
+        if(!s.exists()) return alert("No existe");
         const u = s.data();
-
-        if(u.nivel === "Operador") {
-            start(u);
-        } else {
+        if(u.nivel === "Operador") start(u);
+        else {
             document.getElementById('pin-box').style.display = 'block';
             if(pin === u.pin) start(u);
-            else if(pin !== "") alert("PIN Incorrecto para nivel Líder.");
+            else if(pin !== "") alert("PIN Mal");
         }
     };
 
     function start(u) {
-        user = u; 
-        document.getElementById('ui-login').style.display = 'none';
+        user = u; document.getElementById('ui-login').style.display = 'none';
         document.getElementById('ui-scan').style.display = 'block';
         navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s => {
-            document.getElementById('webcam').srcObject = s; 
-            ocrLoop();
+            document.getElementById('webcam').srcObject = s; ocrLoop();
         });
     }
 
-    // Lógica de Reconocimiento Corregida (Filtros Estrictos)
     async function ocrLoop() {
         if(paused || step > 3) return;
-        
         const v = document.getElementById('webcam');
-        const c = document.createElement('canvas'); 
-        c.width = 400; c.height = 300;
+        const c = document.createElement('canvas'); c.width = 400; c.height = 300;
         c.getContext('2d').drawImage(v, 0, 0, 400, 300);
-        
         const { data: { text } } = await Tesseract.recognize(c, 'eng');
-        
-        // Limpieza profunda: Solo letras y números, sin espacios ni símbolos
         const raw = text.replace(/[^A-Z0-9]/g, '').toUpperCase();
         
-        // Patrones definidos según tu instrucción
-        const patternSebango = raw.match(/([TKP]\d{3,4})/); // Busca TXXX, KXXX, PXXX
-        const patternCliente = raw.match(/(M\d{3,4})/);    // Busca MXXX
+        const patternSebango = raw.match(/([TKP]\d{3,4})/);
+        const patternCliente = raw.match(/(M\d{3,4})/);
 
-        if ((step === 1 || step === 2) && patternSebango) {
-            found(patternSebango[0]); // Captura solo el código válido
-        } 
-        else if (step === 3 && patternCliente) {
-            found(patternCliente[0]); // Captura solo el ID MXXX
-        }
+        if ((step === 1 || step === 2) && patternSebango) found(patternSebango[0]);
+        else if (step === 3 && patternCliente) found(patternCliente[0]);
 
         requestAnimationFrame(ocrLoop);
     }
@@ -134,77 +110,68 @@
         
         if(step === 1) { 
             jamaita = val; 
-            show(true); 
-        }
-        else if(step === 2) { 
-            if(val === jamaita) show(true); 
-            else show(false, `MEZCLA: Jamaita era ${jamaita} y Caja es ${val}`); 
-        }
-        else if(step === 3) {
-            checkDatabase(val);
+            showFeedback(true); 
+        } else if(step === 2) { 
+            if(val === jamaita) showFeedback(true); 
+            else showFeedback(false, "ERROR: Sebango de Caja no coincide con Jamaita"); 
+        } else if(step === 3) {
+            checkM(val);
         }
     }
 
-    async function checkDatabase(id) {
+    async function checkM(id) {
         const s = await getDoc(doc(db, "Maestro_Partes", id));
-        if(s.exists() && String(s.data().Sebango) === jamaita) {
-            show(true);
-        } else { 
-            show(false, `ERROR CRUZADO: ${id} no pertenece a ${jamaita}`); 
-        }
+        if(s.exists() && String(s.data().Sebango) === jamaita) showFeedback(true);
+        else showFeedback(false, `ERROR: ID ${id} no pertenece a ${jamaita}`);
     }
 
-    function show(ok, msg="") {
+    function showFeedback(ok, msg="") {
         const el = ok ? 'ok-msg' : 'ng-msg';
         document.getElementById(el).style.display = 'flex';
+        
         setTimeout(() => {
             document.getElementById(el).style.display = 'none';
-            if(ok) document.getElementById('btn-res').style.display = 'block';
-            else lock(msg);
+            if(ok) {
+                document.getElementById('btn-res').style.display = 'block';
+                document.getElementById('btn-retry-ui').style.display = 'none';
+            } else {
+                // Si es un error de proceso (mezcla), bloqueamos con líder.
+                // Si solo quieres que repita escaneo SIEMPRE, quita la llamada a lock() y deja solo el botón.
+                document.getElementById('btn-retry-ui').style.display = 'block';
+                logError(msg);
+            }
         }, 1500);
     }
 
-    window.goNext = () => {
-        step++; 
-        paused = false; 
-        document.getElementById('btn-res').style.display = 'none';
+    window.retryScan = () => {
+        paused = false;
+        document.getElementById('btn-retry-ui').style.display = 'none';
         document.getElementById('res-val').innerText = "---";
-        
-        const stepLabel = document.getElementById('step-txt');
-        const hint = document.getElementById('hint');
-        
-        if(step === 2) {
-            stepLabel.innerText = "PASO 2: ESCANEAR CAJA";
-            hint.innerText = "Busca códigos T, K o P";
-        } else if(step === 3) {
-            stepLabel.innerText = "PASO 3: ESCANEAR ID CLIENTE (M)";
-            hint.innerText = "Busca códigos M (Ej: M351)";
-        }
         ocrLoop();
     };
 
-    function lock(m) {
-        document.getElementById('lock-reason').innerText = m;
-        document.getElementById('lock').style.display = 'flex';
-        // Registro en bitácora
+    window.goNext = () => {
+        step++; paused = false; 
+        document.getElementById('btn-res').style.display = 'none';
+        document.getElementById('res-val').innerText = "---";
+        const txt = document.getElementById('step-txt');
+        if(step === 2) txt.innerText = "PASO 2: ESCANEAR CAJA";
+        if(step === 3) txt.innerText = "PASO 3: ESCANEAR ID CLIENTE (M)";
+        ocrLoop();
+    };
+
+    function logError(m) {
         addDoc(collection(db, "Bitacora_Incidencias"), { 
-            usuario: user.nombre, 
-            status: "ERROR", 
-            customer_id: jamaita,
-            error_msg: m, 
-            timestamp: serverTimestamp() 
+            usuario: user.nombre, status: "NG", customer_id: jamaita, error_msg: m, timestamp: serverTimestamp() 
         });
     }
 
+    // El bloqueo por PIN queda para casos donde el Líder decida intervenir manualmente
     window.unlock = async () => {
         const p = document.getElementById('pin-tl').value;
         const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", p));
         const s = await getDocs(q);
-        if(!s.empty) {
-            location.reload(); 
-        } else { 
-            alert("PIN DE LÍDER INCORRECTO O SIN PERMISOS."); 
-        }
+        if(!s.empty) location.reload(); else alert("PIN Incorrecto");
     };
 </script>
 </body>
