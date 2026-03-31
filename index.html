@@ -1,824 +1,214 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>KTMEX Scanner</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-<style>
-
-  body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
-
-  video { width: 100%; height: 50%; object-fit: cover; display: block; }
- 
-  .panel {
-
-    position: fixed; bottom: 0; width: 100%; height: 50%;
-
-    background: white; color: #333;
-
-    border-radius: 20px 20px 0 0;
-
-    padding: 25px; box-sizing: border-box;
-
-    overflow-y: auto;
-
-  }
- 
-  .btn-next {
-
-    background: #1a1c2c; color: white; border: none;
-
-    padding: 18px; width: 100%; border-radius: 12px;
-
-    font-weight: bold; font-size: 18px; margin-top: 10px;
-
-    cursor: pointer;
-
-  }
-
-  .btn-next:disabled { background: #aaa; cursor: not-allowed; }
- 
-  .status-overlay {
-
-    position: fixed; top: 0; width: 100%; height: 100%;
-
-    z-index: 2000; display: none;
-
-    align-items: center; justify-content: center;
-
-    font-size: 30px; font-weight: bold;
-
-    flex-direction: column; gap: 10px;
-
-  }
- 
-  .lock-ui {
-
-    position: fixed; top: 0; width: 100%; height: 100%;
-
-    background: #e30613; z-index: 3000; display: none;
-
-    flex-direction: column; align-items: center; justify-content: center;
-
-    padding: 30px; text-align: center; box-sizing: border-box;
-
-  }
- 
-  input {
-
-    width: 100%; padding: 15px; margin-bottom: 10px;
-
-    border: 1px solid #ddd; border-radius: 8px;
-
-    font-size: 16px; box-sizing: border-box;
-
-  }
-
-  input.error-field { border-color: #e30613; }
- 
-  /* Feedback login */
-
-  #login-feedback {
-
-    font-size: 13px; padding: 8px 12px; border-radius: 6px;
-
-    margin-bottom: 10px; display: none;
-
-  }
-
-  #login-feedback.error   { background: #fff5f5; color: #c53030; display: block; }
-
-  #login-feedback.loading { background: #ebf8ff; color: #2b6cb0; display: block; }
- 
-  /* OCR status */
-
-  #ocr-status {
-
-    font-size: 12px; color: #a0aec0;
-
-    text-align: center; min-height: 16px; margin-top: 4px;
-
-  }
- 
-  /* PIN feedback en lock */
-
-  #pin-lock-feedback {
-
-    color: white; font-size: 13px;
-
-    margin-bottom: 10px; min-height: 18px;
-
-  }
- 
-  /* Etiqueta de nivel de usuario */
-
-  #user-badge {
-
-    font-size: 12px; background: #edf2f7; color: #4a5568;
-
-    padding: 4px 10px; border-radius: 20px; display: inline-block;
-
-    margin-bottom: 10px;
-
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KTMEX Poka-Yoke Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
+        video { width: 100%; height: 50%; object-fit: cover; border-bottom: 4px solid #e30613; }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 50%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .btn-next { background: #1a1c2c; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 8px; }
+        .btn-retry { background: #f39c12; color: white; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 8px; display: none; cursor: pointer; }
+        .btn-finish { background: #27ae60; color: white; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 20px; margin-top: 10px; display: none; cursor: pointer; }
+        .status-overlay { position: fixed; top: 0; width: 100%; height: 100%; z-index: 2000; display: none; align-items: center; justify-content: center; font-size: 35px; font-weight: bold; text-align: center; }
+        input { width: 100%; padding: 16px; margin-bottom: 12px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        #res-val { font-size: 32px; font-weight: 800; color: #e30613; text-align: center; padding: 10px; background: #fff5f5; border-radius: 15px; border: 2px dashed #e30613; min-height: 45px; margin: 10px 0; }
+        #step-txt { margin: 0; color: #1a1c2c; font-size: 1.2rem; }
+    </style>
 </head>
 <body>
- 
+
 <video id="webcam" autoplay playsinline></video>
- 
+
 <div class="panel">
- 
-  <!-- LOGIN -->
-<div id="ui-login">
-<h2 style="color:#e30613; margin-top:0;">Acceso KTMEX</h2>
-<input type="text" id="nom-input" placeholder="Nómina" autocomplete="off">
- 
-    <!-- FIX: PIN solo visible para Líderes, con instrucción clara -->
-<div id="pin-box" style="display:none;">
-<p style="font-size:13px; color:#718096; margin:0 0 6px 0;">
+    <div id="ui-login">
+        <h2 style="color:#e30613; margin-top:0;">Acceso KTMEX</h2>
+        <input type="text" id="nom-input" placeholder="Nómina">
+        <div id="pin-box" style="display:none;"><input type="password" id="pin-input" placeholder="PIN Líder"></div>
+        <button class="btn-next" onclick="checkLogin()">INGRESAR</button>
+    </div>
 
-        Cuenta de Líder detectada — ingresa tu PIN para continuar.
-</p>
-<input type="password" id="pin-input" placeholder="PIN de Líder">
+    <div id="ui-scan" style="display:none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="step-txt">PASO 1: JAMAITA</h3>
+            <span id="user-tag" style="font-size: 10px; color: #999;"></span>
+        </div>
+        <div id="res-val">---</div>
+        
+        <div id="actions-area">
+            <button id="btn-res" class="btn-next" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
+            <button id="btn-retry-ui" class="btn-retry" onclick="retryScan()">🔄 REPETIR ESCANEO</button>
+            <button id="btn-finish-ui" class="btn-finish" onclick="resetToStepOne()">✅ FINALIZAR Y NUEVA PIEZA</button>
+        </div>
+    </div>
 </div>
- 
-    <div id="login-feedback"></div>
-<button class="btn-next" id="btn-login" onclick="window.checkLogin()">Ingresar</button>
-</div>
- 
-  <!-- ESCANEO -->
-<div id="ui-scan" style="display:none;">
-<div id="user-badge">👤 —</div>
-<h3 id="step-txt" style="margin:4px 0 8px 0;">PASO 1: JAMAITA</h3>
- 
-    <!-- FIX: Contexto de qué está buscando el OCR -->
-<div id="res-val" style="font-size:28px; font-weight:bold; color:#e30613; text-align:center; padding:15px 0;">
 
-      🔍 Apunta la cámara al código
-</div>
-<div id="ocr-status"></div>
- 
-    <button id="btn-res" class="btn-next"
+<div id="ok-msg" class="status-overlay" style="background:rgba(39,174,96,0.95); color:white;">✅ LECTURA OK</div>
+<div id="ng-msg" class="status-overlay" style="background:rgba(211, 47, 47, 0.95); color:white;">❌ ERROR</div>
 
-      style="display:none; background:#27ae60;"
-
-      onclick="window.goNext()">
-
-      CONTINUAR ▶
-</button>
-</div>
- 
-</div>
- 
-<!-- OK overlay -->
-<div id="ok-msg" class="status-overlay" style="background:rgba(39,174,96,0.93);">
-<span style="font-size:60px;">✅</span>
-<span>CORRECTO</span>
-</div>
- 
-<!-- NG overlay -->
-<div id="ng-msg" class="status-overlay" style="background:rgba(227,6,19,0.93);">
-<span style="font-size:60px;">❌</span>
-<span>ERROR</span>
-</div>
- 
-<!-- LOCK -->
-<div id="lock" class="lock-ui">
-<h1 style="font-size:60px; margin:0;">🛑</h1>
-<h2 id="lock-reason" style="margin:10px 0 20px;">BLOQUEO</h2>
-<p style="opacity:0.9; margin-bottom:15px;">Solicita desbloqueo a tu Líder (TL)</p>
-<input type="password" id="pin-tl" placeholder="PIN LÍDER"
-
-    style="text-align:center; max-width:220px; color:#333;">
-<div id="pin-lock-feedback"></div>
-<!-- FIX: Botón llama a window.unlock() correctamente -->
-<button class="btn-next" style="background:white; color:#e30613; max-width:220px;"
-
-    onclick="window.unlock()">
-
-    DESBLOQUEAR
-</button>
-</div>
- 
 <script type="module">
-
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-
-  import {
-
-    getFirestore, doc, getDoc, collection, addDoc,
-
-    serverTimestamp, query, where, getDocs
-
-  } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
- 
-  // FIX: Credenciales reales restauradas (estaban como placeholder vacío)
-
-  const firebaseConfig = {
-
-    apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
-
-    authDomain: "logistica-ktmex.firebaseapp.com",
-
-    projectId: "logistica-ktmex",
-
-    storageBucket: "logistica-ktmex.firebasestorage.app",
-
-    messagingSenderId: "166597623735",
-
-    appId: "1:166597623735:web:c0f8d372bc1ee12d81b232"
-
-  };
- 
-  const app = initializeApp(firebaseConfig);
-
-  const db  = getFirestore(app);
- 
-  let user          = null;
-
-  let step          = 1;
-
-  let jamaita       = "";
-
-  let scannerActive = false;
-
-  let ocrRunning    = false;
-
-  let currentID     = "";
- 
-  // ─── CAPA 3: VOTING ────────────────────────────────────────────────────────
-
-  const VOTE_THRESHOLD = 2;
-
-  let voteCandidate = "";
-
-  let voteCount     = 0;
- 
-  // ─── CAPA 1: RECORTE DE ZONA — solo analiza la franja central del video ────
-
-  function cropReticle(video, canvas, ctx) {
-
-    const vw = video.videoWidth;
-
-    const vh = video.videoHeight;
-
-    const cropW = Math.floor(vw * 0.70);
-
-    const cropH = Math.floor(vh * 0.25);
-
-    const cropX = Math.floor((vw - cropW) / 2);
-
-    const cropY = Math.floor((vh - cropH) / 2);
-
-    canvas.width  = cropW;
-
-    canvas.height = cropH;
-
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-  }
- 
-  // ─── CAPA 2: REGEX CON ANCLA — el código no debe estar precedido de otra letra
-
-  function extractCode(rawText, type) {
-
-    if (type === 'J') {
-
-      const matches = [...rawText.matchAll(/(?<![A-Z])([KTP]\d{3,4})(?![0-9])/g)];
-
-      return matches.length ? matches[0][1] : null;
-
-    }
-
-    if (type === 'M') {
-
-      const matches = [...rawText.matchAll(/(?<![A-Z])(M\d{3,4})(?![0-9])/g)];
-
-      return matches.length ? matches[0][1] : null;
-
-    }
-
-    return null;
-
-  }
- 
-  // ─── CAPA 3: VOTING — solo acepta si el código aparece N veces seguidas ───
-
-  function voteCode(candidate) {
-
-    if (candidate === voteCandidate) {
-
-      voteCount++;
-
-    } else {
-
-      voteCandidate = candidate;
-
-      voteCount     = 1;
-
-    }
-
-    if (voteCount >= VOTE_THRESHOLD) {
-
-      voteCandidate = "";
-
-      voteCount     = 0;
-
-      return true;
-
-    }
-
-    return false;
-
-  }
- 
-  // ─── HELPERS ──────────────────────────────────────────────────────────────
-
-  function setLoginFeedback(type, msg) {
-
-    const el = document.getElementById('login-feedback');
-
-    el.className = type;
-
-    el.textContent = msg;
-
-  }
- 
-  function setOcrStatus(msg) {
-
-    document.getElementById('ocr-status').textContent = msg;
-
-  }
- 
-  // ─── FIX: LOGIN ROBUSTO ────────────────────────────────────────────────────
-
-  // Antes: lógica rota para Líder, alert(), sin manejo de usuario inexistente.
-
-  // Ahora: flujo claro en dos fases, feedback visual, sin alert().
-
-  window.checkLogin = async () => {
-
-    const nomInput = document.getElementById('nom-input');
-
-    const pinInput = document.getElementById('pin-input');
-
-    const pinBox   = document.getElementById('pin-box');
-
-    const btnLogin = document.getElementById('btn-login');
-
-    const nom      = nomInput.value.trim();
- 
-    if (!nom) {
-
-      nomInput.classList.add('error-field');
-
-      setLoginFeedback('error', '⚠️ Ingresa tu número de nómina.');
-
-      return;
-
-    }
-
-    nomInput.classList.remove('error-field');
- 
-    btnLogin.disabled = true;
-
-    setLoginFeedback('loading', '⏳ Verificando...');
- 
-    try {
-
-      const snap = await getDoc(doc(db, "Usuarios", nom));
- 
-      if (!snap.exists()) {
-
-        setLoginFeedback('error', '❌ Nómina no registrada. Contacta a tu TL.');
-
-        btnLogin.disabled = false;
-
-        return;
-
-      }
- 
-      const u = snap.data();
- 
-      if (u.nivel === "Operador") {
-
-        // Operador: acceso directo sin PIN
-
-        setLoginFeedback('loading', '✅ Acceso concedido. Iniciando cámara...');
-
-        await startApp(u);
- 
-      } else {
-
-        // Líder: requiere PIN
-
-        pinBox.style.display = 'block';
-
-        const pin = pinInput.value.trim();
- 
-        if (!pin) {
-
-          // Primera pasada: mostrar campo PIN y pedir que lo ingrese
-
-          setLoginFeedback('error', '🔑 Ingresa tu PIN de Líder para continuar.');
-
-          btnLogin.disabled = false;
-
-          pinInput.focus();
-
-          return;
-
-        }
- 
-        if (pin !== String(u.pin)) {
-
-          // PIN incorrecto
-
-          setLoginFeedback('error', '❌ PIN incorrecto. Intenta de nuevo.');
-
-          pinInput.value = '';
-
-          pinInput.focus();
-
-          btnLogin.disabled = false;
-
-          return;
-
-        }
- 
-        // PIN correcto
-
-        setLoginFeedback('loading', '✅ Acceso de Líder concedido. Iniciando cámara...');
-
-        await startApp(u);
-
-      }
- 
-    } catch (err) {
-
-      setLoginFeedback('error', `❌ Error de conexión: ${err.message}`);
-
-      btnLogin.disabled = false;
-
-    }
-
-  };
- 
-  // ─── FIX: INICIO DE CÁMARA CON MANEJO DE ERROR ────────────────────────────
-
-  async function startApp(u) {
-
-    user = u;
-
-    try {
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-
-        video: { facingMode: "environment" }
-
-      });
-
-      document.getElementById('webcam').srcObject = stream;
-
-      document.getElementById('ui-login').style.display = 'none';
-
-      document.getElementById('ui-scan').style.display  = 'block';
-
-      document.getElementById('user-badge').textContent =
-
-        `👤 ${u.nombre || u.Nomina} — ${u.nivel}`;
- 
-      scannerActive = true;
-
-      runLoop();
- 
-    } catch (err) {
-
-      // FIX: Error de permisos de cámara con mensaje claro
-
-      setLoginFeedback('error', '❌ No se pudo acceder a la cámara. Verifica los permisos.');
-
-      document.getElementById('btn-login').disabled = false;
-
-    }
-
-  }
- 
-  // ─── LOOP OCR con las 3 capas de filtrado ─────────────────────────────────
-
-  async function runLoop() {
-
-    const video  = document.getElementById('webcam');
-
-    const canvas = document.createElement('canvas');
-
-    const ctx    = canvas.getContext('2d');
- 
-    const loop = async () => {
-
-      if (!scannerActive) return;
-
-      if (ocrRunning)     { requestAnimationFrame(loop); return; }
-
-      if (video.videoWidth === 0 || video.videoHeight === 0) { requestAnimationFrame(loop); return; }
- 
-      ocrRunning = true;
-
-      setOcrStatus('🔍 Analizando...');
- 
-      // CAPA 1: Recortar solo la zona central (donde apunta el usuario)
-
-      cropReticle(video, canvas, ctx);
- 
-      try {
-
-        const ocrPromise = Tesseract.recognize(canvas, 'eng');
-
-        const timeout    = new Promise((_, reject) =>
-
-          setTimeout(() => reject(new Error('timeout')), 4000)
-
-        );
-
-        const { data: { text } } = await Promise.race([ocrPromise, timeout]);
- 
-        // Limpiar — preservar solo letras y números
-
-        const raw = text.replace(/[^A-Z0-9]/g, '').toUpperCase();
- 
-        // CAPA 2: Regex con ancla de inicio estricta
-
-        const mJ = extractCode(raw, 'J');
-
-        const mM = extractCode(raw, 'M');
- 
-        setOcrStatus('');
- 
-        if (step === 1 && mJ) {
-
-          // CAPA 3: Voting
-
-          if (voteCode(mJ)) {
-
-            found(mJ);
-
-          } else {
-
-            setOcrStatus(`⏳ Confirmando: ${mJ}...`);
-
-          }
- 
-        } else if (step === 2 && mJ) {
-
-          if (voteCode(mJ)) {
-
-            found(mJ);
-
-          } else {
-
-            setOcrStatus(`⏳ Confirmando: ${mJ}...`);
-
-          }
- 
-        } else if (step === 3 && mM) {
-
-          if (voteCode(mM)) {
-
-            found(mM);
-
-          } else {
-
-            setOcrStatus(`⏳ Confirmando: ${mM}...`);
-
-          }
-
-        }
- 
-      } catch (err) {
-
-        setOcrStatus('');
-
-        console.warn('OCR:', err.message);
-
-      }
- 
-      ocrRunning = false;
-
-      requestAnimationFrame(loop);
-
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
+        authDomain: "logistica-ktmex.firebaseapp.com",
+        projectId: "logistica-ktmex",
+        storageBucket: "logistica-ktmex.firebasestorage.app",
+        messagingSenderId: "166597623735",
+        appId: "1:166597623735:web:c0f8d372bc1ee12d81b232"
     };
- 
-    loop();
 
-  }
- 
-  // ─── FOUND ─────────────────────────────────────────────────────────────────
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-  function found(val) {
+    let user = null; let step = 1; let jamaita = ""; let paused = false;
 
-    scannerActive = false; // Pausar scanner mientras se procesa
+    window.checkLogin = async () => {
+        const nom = document.getElementById('nom-input').value;
+        const pin = document.getElementById('pin-input').value;
+        const s = await getDoc(doc(db, "Usuarios", nom));
+        if(!s.exists()) return alert("Nómina no encontrada");
+        const u = s.data();
+        if(u.nivel === "Operador") start(u);
+        else {
+            document.getElementById('pin-box').style.display = 'block';
+            if(pin === u.pin) start(u);
+            else if(pin !== "") alert("PIN Incorrecto");
+        }
+    };
 
-    currentID = val;
-
-    document.getElementById('res-val').textContent = val;
- 
-    if (step === 1) {
-
-      jamaita = val;
-
-      showResult(true);
- 
-    } else if (step === 2) {
-
-      if (val === jamaita) showResult(true);
-
-      else showResult(false, `Mezcla de Sebango: esperaba ${jamaita}, detecté ${val}`);
- 
-    } else if (step === 3) {
-
-      checkMaestro(val);
-
+    function start(u) {
+        user = u;
+        document.getElementById('user-tag').innerText = u.nombre;
+        document.getElementById('ui-login').style.display = 'none';
+        document.getElementById('ui-scan').style.display = 'block';
+        navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s => {
+            document.getElementById('webcam').srcObject = s; 
+            ocrLoop();
+        });
     }
 
-  }
- 
-  // ─── FIX: checkMaestro con manejo de documento inexistente ────────────────
+    async function ocrLoop() {
+        if(paused || step > 3) return;
+        const v = document.getElementById('webcam');
+        const c = document.createElement('canvas'); 
+        c.width = 400; c.height = 300;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(v, 0, 0, 400, 300);
+        
+        const { data: { text } } = await Tesseract.recognize(c, 'eng');
+        const cleanLines = text.toUpperCase().split(/[\s\n]+/);
+        
+        let foundSebango = null;
+        let foundM = null;
 
-  async function checkMaestro(id) {
+        for (let word of cleanLines) {
+            // Limpieza: solo letras y números
+            const pure = word.replace(/[^A-Z0-9]/g, '');
+            
+            // FILTRO ANTI-NÚMERO DE PARTE (AK010)
+            // 1. Debe tener longitud de Sebango (3 a 5 caracteres máx)
+            // 2. No debe contener guiones en la palabra original
+            // 3. El patrón debe ser exacto desde el inicio ^ hasta el fin $
+            if (pure.match(/^[TKP]\d{3,4}$/) && !word.includes('-') && word.length <= 5) {
+                foundSebango = pure;
+            }
+            // Patrón para ID Cliente (M)
+            if (pure.match(/^M\d{3,4}$/)) {
+                foundM = pure;
+            }
+        }
 
-    try {
+        if ((step === 1 || step === 2) && foundSebango) validateFound(foundSebango);
+        else if (step === 3 && foundM) validateFound(foundM);
 
-      const snap = await getDoc(doc(db, "Maestro_Partes", id));
- 
-      if (!snap.exists()) {
-
-        showResult(false, `${id} no encontrado en Maestro de Partes`);
-
-        return;
-
-      }
- 
-      const data = snap.data();
- 
-      // FIX: Compatibilidad con img_b64 (nuevo) e img_url (legacy)
-
-      // No se usa aquí visualmente pero se registra para trazabilidad
-
-      if (String(data.Sebango).toUpperCase() === jamaita.toUpperCase()) {
-
-        showResult(true);
-
-      } else {
-
-        showResult(false, `${id} requiere Sebango ${data.Sebango}, no ${jamaita}`);
-
-      }
- 
-    } catch (err) {
-
-      showResult(false, `Error al consultar Maestro: ${err.message}`);
-
+        requestAnimationFrame(ocrLoop);
     }
 
-  }
- 
-  // ─── SHOW RESULT ───────────────────────────────────────────────────────────
+    function validateFound(val) {
+        paused = true; 
+        document.getElementById('res-val').innerText = val;
+        document.getElementById('btn-retry-ui').style.display = 'block';
 
-  function showResult(ok, msg = "") {
-
-    const elId = ok ? 'ok-msg' : 'ng-msg';
-
-    const el   = document.getElementById(elId);
-
-    el.style.display = 'flex';
- 
-    setTimeout(() => {
-
-      el.style.display = 'none';
-
-      if (ok) {
-
-        document.getElementById('btn-res').style.display = 'block';
-
-        // Reactivar scanner solo si el usuario presiona CONTINUAR
-
-      } else {
-
-        lockOut(msg);
-
-      }
-
-    }, 1500);
-
-  }
- 
-  // ─── FIX: goNext con validación de step máximo ────────────────────────────
-
-  window.goNext = () => {
-
-    if (step >= 3) return; // FIX: no superar step 3
- 
-    step++;
-
-    document.getElementById('btn-res').style.display = 'none';
-
-    document.getElementById('res-val').textContent   = '🔍 Apunta la cámara al código';
- 
-    // FIX: Texto de paso correcto para cada step
-
-    const pasos = { 2: 'PASO 2: CAJA', 3: 'PASO 3: TTMX (MXXX)' };
-
-    document.getElementById('step-txt').textContent = pasos[step] || '';
- 
-    scannerActive = true;
-
-    runLoop();
-
-  };
- 
-  // ─── FIX: lockOut registra customer_id en bitácora ────────────────────────
-
-  function lockOut(msg) {
-
-    document.getElementById('lock-reason').textContent = msg;
-
-    document.getElementById('lock').style.display      = 'flex';
- 
-    // FIX: Incluye customer_id (faltaba antes) y manejo de error en addDoc
-
-    addDoc(collection(db, "Bitacora_Incidencias"), {
-
-      usuario:     user?.nombre || '—',
-
-      status:      "ERROR",
-
-      customer_id: currentID || "N/A",   // FIX: campo faltante
-
-      error_msg:   msg,
-
-      timestamp:   serverTimestamp()
-
-    }).catch(err => console.error('Error bitácora:', err));
-
-  }
- 
-  // ─── FIX: unlock sin alert(), con feedback visual ─────────────────────────
-
-  window.unlock = async () => {
-
-    const pin      = document.getElementById('pin-tl').value.trim();
-
-    const feedback = document.getElementById('pin-lock-feedback');
- 
-    if (!pin) {
-
-      feedback.textContent = '⚠️ Ingresa el PIN del Líder.';
-
-      return;
-
-    }
- 
-    feedback.textContent = '⏳ Verificando...';
- 
-    try {
-
-      const q    = query(
-
-        collection(db, "Usuarios"),
-
-        where("nivel", "==", "Lider"),
-
-        where("pin",   "==", pin)
-
-      );
-
-      const snap = await getDocs(q);
- 
-      if (!snap.empty) {
-
-        feedback.textContent = '✅ PIN correcto. Reiniciando...';
-
-        setTimeout(() => location.reload(), 1000);
-
-      } else {
-
-        feedback.textContent = '❌ PIN incorrecto. Intenta de nuevo.';
-
-        document.getElementById('pin-tl').value = '';
-
-      }
-
-    } catch (err) {
-
-      feedback.textContent = `❌ Error de conexión: ${err.message}`;
-
+        if(step === 1) { 
+            jamaita = val; 
+            showFeedback(true); 
+        } else if(step === 2) { 
+            if(val === jamaita) showFeedback(true); 
+            else showFeedback(false, "ERROR: Sebango Caja no coincide"); 
+        } else if(step === 3) {
+            checkDatabase(val);
+        }
     }
 
-  };
+    async function checkDatabase(id) {
+        const s = await getDoc(doc(db, "Maestro_Partes", id));
+        if(s.exists() && String(s.data().Sebango) === jamaita) {
+            showFeedback(true);
+        } else {
+            showFeedback(false, "ERROR: ID Cliente no corresponde a Jamaita");
+        }
+    }
+
+    function showFeedback(ok, msg="") {
+        const el = ok ? 'ok-msg' : 'ng-msg';
+        document.getElementById(el).style.display = 'flex';
+        
+        setTimeout(() => {
+            document.getElementById(el).style.display = 'none';
+            if(ok) {
+                if(step < 3) {
+                    document.getElementById('btn-res').style.display = 'block';
+                } else {
+                    // Si estamos en el paso 3 y es correcto, habilitamos FINALIZAR
+                    document.getElementById('btn-finish-ui').style.display = 'block';
+                    document.getElementById('btn-retry-ui').style.display = 'none';
+                }
+            } else {
+                logError(msg);
+            }
+        }, 1200);
+    }
+
+    window.retryScan = () => {
+        paused = false;
+        document.getElementById('btn-retry-ui').style.display = 'none';
+        document.getElementById('btn-res').style.display = 'none';
+        document.getElementById('res-val').innerText = "---";
+        ocrLoop();
+    };
+
+    window.goNext = () => {
+        step++; paused = false; 
+        document.getElementById('btn-res').style.display = 'none';
+        document.getElementById('btn-retry-ui').style.display = 'none';
+        document.getElementById('res-val').innerText = "---";
+        
+        const txt = document.getElementById('step-txt');
+        if(step === 2) txt.innerText = "PASO 2: CAJA";
+        if(step === 3) txt.innerText = "PASO 3: ID CLIENTE";
+        ocrLoop();
+    };
+
+    window.resetToStepOne = () => {
+        // Reinicio completo de variables para pieza nueva
+        step = 1;
+        jamaita = "";
+        paused = false;
+        document.getElementById('btn-finish-ui').style.display = 'none';
+        document.getElementById('res-val').innerText = "---";
+        document.getElementById('step-txt').innerText = "PASO 1: JAMAITA";
+        ocrLoop();
+    };
+
+    function logError(m) {
+        addDoc(collection(db, "Bitacora_Incidencias"), { 
+            usuario: user.nombre, status: "NG", customer_id: jamaita, error_msg: m, timestamp: serverTimestamp() 
+        });
+    }
 </script>
 </body>
 </html>
-
- 
