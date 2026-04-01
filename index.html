@@ -3,53 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX Poka-Yoke Pro</title>
+    <title>KTMEX Poka-Yoke V4.1</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
-        video { width: 100%; height: 50%; object-fit: cover; border-bottom: 4px solid #e30613; }
-        .panel { position: fixed; bottom: 0; width: 100%; height: 50%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
-        .btn-next { background: #1a1c2c; color: white; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 8px; width: 100%; }
-        .btn-retry { background: #f39c12; color: white; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; margin-top: 8px; display: none; cursor: pointer; }
-        .btn-finish { background: #27ae60; color: white; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 20px; margin-top: 10px; display: none; cursor: pointer; }
-        .status-overlay { position: fixed; top: 0; width: 100%; height: 100%; z-index: 2000; display: none; align-items: center; justify-content: center; font-size: 35px; font-weight: bold; text-align: center; }
-        input { width: 100%; padding: 16px; margin-bottom: 12px; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
-        #res-val { font-size: 32px; font-weight: 800; color: #e30613; text-align: center; padding: 10px; background: #fff5f5; border-radius: 15px; border: 2px dashed #e30613; min-height: 45px; margin: 10px 0; }
+        video { width: 100%; height: 40%; object-fit: cover; }
+        .panel { position: fixed; bottom: 0; width: 100%; height: 60%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        .btn-main { background: #1a1c2c; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 10px; cursor: pointer; }
+        .btn-flash { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; border: 1px solid white; padding: 12px; border-radius: 50%; z-index: 100; font-size: 20px; }
+        #res-val { font-size: 26px; font-weight: 800; color: #e30613; text-align: center; border: 2px dashed #e30613; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 10px; }
+        .img-verify { width: 100%; height: 140px; object-fit: contain; background: #f0f0f0; border-radius: 12px; display: none; margin-bottom: 10px; border: 1px solid #ddd; }
+        .option-btn { background: #f8f9fa; border: 2px solid #dee2e6; color: #333; padding: 12px; width: 100%; border-radius: 8px; margin-bottom: 8px; text-align: left; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .option-btn:active { background: #e9ecef; }
+        .lock-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        input { width: 80%; padding: 15px; border-radius: 8px; border: none; font-size: 18px; text-align: center; }
     </style>
 </head>
 <body>
 
+<button class="btn-flash" onclick="toggleFlash()">🔦</button>
 <video id="webcam" autoplay playsinline></video>
 
 <div class="panel">
     <div id="ui-login">
         <h2 style="color:#e30613; margin-top:0;">Acceso KTMEX</h2>
-        <input type="text" id="nom-input" placeholder="Nómina">
-        <div id="pin-box" style="display:none;"><input type="password" id="pin-input" placeholder="PIN Líder"></div>
-        <button class="btn-next" onclick="checkLogin()">INGRESAR</button>
+        <input type="text" id="nom-input" placeholder="Número de Nómina" style="width:100%; box-sizing:border-box; margin-bottom:10px; padding:15px; border:1px solid #ccc; border-radius:8px;">
+        <div id="pin-box" style="display:none;"><input type="password" id="pin-input" placeholder="PIN Líder" style="width:100%; box-sizing:border-box; padding:15px; border:1px solid #ccc; border-radius:8px;"></div>
+        <button class="btn-main" onclick="checkLogin()">INGRESAR AL SISTEMA</button>
     </div>
 
     <div id="ui-scan" style="display:none;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 id="step-txt" style="margin:0;">PASO 1: JAMAITA</h3>
-            <span id="user-tag" style="font-size: 10px; color: #999;"></span>
-        </div>
+        <h3 id="step-txt" style="margin-top:0; color:#1a1c2c;">PASO 1: JAMAITA</h3>
         <div id="res-val">---</div>
         
-        <div id="actions-area">
-            <button id="btn-res" class="btn-next" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
-            <button id="btn-retry-ui" class="btn-retry" onclick="retryScan()">🔄 REPETIR ESCANEO</button>
-            <button id="btn-finish-ui" class="btn-finish" onclick="resetToStepOne()">✅ FINALIZAR Y NUEVA PIEZA</button>
+        <div id="step4-container" style="display:none;">
+            <p style="font-weight:bold; font-size:14px; margin-bottom:5px;">Verifique imagen y seleccione Tekin:</p>
+            <img id="img-tekin" class="img-verify">
+            <div id="options-area"></div>
         </div>
+        
+        <button id="btn-res" class="btn-main" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
+        <button id="btn-retry" class="btn-main" style="background:#f39c12;" onclick="secureRetry()">🔄 REPETIR ESCANEO</button>
+        <button id="btn-finish" class="btn-main" style="display:none; background:#27ae60;" onclick="resetToStepOne()">✅ FINALIZAR Y NUEVA PIEZA</button>
     </div>
 </div>
 
-<div id="ok-msg" class="status-overlay" style="background:rgba(39,174,96,0.95); color:white;">✅ LECTURA OK</div>
-<div id="ng-msg" class="status-overlay" style="background:rgba(211, 47, 47, 0.95); color:white;">❌ ERROR</div>
+<div id="lock" class="lock-ui">
+    <h1 style="font-size:50px; margin:0;">🛑</h1>
+    <h2>BLOQUEO DE SEGURIDAD</h2>
+    <p>Se requiere PIN de Líder para continuar.</p>
+    <input type="password" id="pin-tl" placeholder="PIN LÍDER">
+    <button class="btn-main" style="background:white; color:#e30613; margin-top:20px; width:80%;" onclick="unlock()">DESBLOQUEAR EQUIPO</button>
+</div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyA6Il03GHS4L_eDY1Kv3fMyF2EwuYLQ5qY",
@@ -63,148 +72,160 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let user = null; let step = 1; let jamaita = ""; let paused = false;
+    let user = null; let step = 1; let jamaita = ""; let paused = false; let track = null;
+    let correctTekin = "";
+
+    window.toggleFlash = async () => {
+        if (!track) return;
+        const caps = track.getCapabilities();
+        if (caps.torch) {
+            const s = track.getSettings();
+            await track.applyConstraints({ advanced: [{ torch: !s.torch }] });
+        }
+    };
 
     window.checkLogin = async () => {
         const nom = document.getElementById('nom-input').value;
         const pin = document.getElementById('pin-input').value;
         const s = await getDoc(doc(db, "Usuarios", nom));
-        if(!s.exists()) return alert("Nómina no encontrada");
+        if(!s.exists()) return alert("Nómina no registrada.");
         const u = s.data();
         if(u.nivel === "Operador") start(u);
         else {
             document.getElementById('pin-box').style.display = 'block';
             if(pin === u.pin) start(u);
-            else if(pin !== "") alert("PIN Mal");
+            else if(pin !== "") alert("PIN Incorrecto.");
         }
     };
 
     function start(u) {
         user = u;
-        document.getElementById('user-tag').innerText = u.nombre;
         document.getElementById('ui-login').style.display = 'none';
         document.getElementById('ui-scan').style.display = 'block';
         navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s => {
-            document.getElementById('webcam').srcObject = s; 
-            ocrLoop();
+            track = s.getVideoTracks()[0];
+            document.getElementById('webcam').srcObject = s; ocrLoop();
         });
     }
+
+    async function logToDB(status, msg = "") {
+        await addDoc(collection(db, "Bitacora_Incidencias"), {
+            usuario: user.nombre,
+            status: status,
+            customer_id: jamaita || "N/A",
+            error_msg: msg,
+            timestamp: serverTimestamp()
+        });
+    }
+
+    window.secureRetry = () => {
+        logToDB("NG", "Reintento solicitado por operador (Bloqueo)");
+        document.getElementById('lock').style.display = 'flex';
+    };
 
     async function ocrLoop() {
         if(paused || step > 3) return;
         const v = document.getElementById('webcam');
-        const c = document.createElement('canvas'); 
-        c.width = 400; c.height = 300;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(v, 0, 0, 400, 300);
-        
+        const c = document.createElement('canvas'); c.width = 400; c.height = 300;
+        c.getContext('2d').drawImage(v, 0, 0, 400, 300);
         const { data: { text } } = await Tesseract.recognize(c, 'eng');
-        const cleanLines = text.toUpperCase().split(/[\s\n]+/);
+        const raw = text.replace(/[^A-Z0-9]/g, '').toUpperCase();
         
-        let foundSebango = null;
-        let foundM = null;
+        const patS = raw.match(/([TKP]\d{3,4})/);
+        const patM = raw.match(/(M\d{3,4})/);
 
-        for (let word of cleanLines) {
-            const pure = word.replace(/[^A-Z0-9]/g, '');
-            // Filtro estricto para evitar terminaciones de números de parte (ej. AK010)
-            if (pure.match(/^[TKP]\d{3,4}$/) && !word.includes('-') && word.length <= 5) {
-                foundSebango = pure;
-            }
-            if (pure.match(/^M\d{3,4}$/)) {
-                foundM = pure;
-            }
-        }
-
-        if ((step === 1 || step === 2) && foundSebango) validateFound(foundSebango);
-        else if (step === 3 && foundM) validateFound(foundM);
+        if ((step === 1 || step === 2) && patS && patS[0].length <= 5) processFound(patS[0]);
+        else if (step === 3 && patM) processFound(patM[0]);
 
         requestAnimationFrame(ocrLoop);
     }
 
-    function validateFound(val) {
-        paused = true; 
+    async function processFound(val) {
+        paused = true;
         document.getElementById('res-val').innerText = val;
-        document.getElementById('btn-retry-ui').style.display = 'block';
-
+        
         if(step === 1) { 
             jamaita = val; 
-            showFeedback(true); 
-        } else if(step === 2) { 
-            if(val === jamaita) showFeedback(true); 
-            else showFeedback(false, "Mezcla de Sebango detectada"); 
-        } else if(step === 3) {
-            checkDatabase(val);
-        }
-    }
-
-    async function checkDatabase(id) {
-        const s = await getDoc(doc(db, "Maestro_Partes", id));
-        if(s.exists() && String(s.data().Sebango) === jamaita) {
-            showFeedback(true);
-        } else {
-            showFeedback(false, "El ID Cliente no pertenece al Sebango escaneado");
-        }
-    }
-
-    function showFeedback(ok, msg="") {
-        const el = ok ? 'ok-msg' : 'ng-msg';
-        document.getElementById(el).style.display = 'flex';
-        
-        setTimeout(() => {
-            document.getElementById(el).style.display = 'none';
-            if(ok) {
-                if(step < 3) {
-                    document.getElementById('btn-res').style.display = 'block';
-                } else {
-                    // CORRECCIÓN: Mostrar botón de finalizar en lugar de continuar en el último paso
-                    document.getElementById('btn-res').style.display = 'none'; 
-                    document.getElementById('btn-finish-ui').style.display = 'block';
-                }
+            document.getElementById('btn-res').style.display = 'block';
+            logToDB("OK", "Paso 1 completado");
+        } else if(step === 2) {
+            if(val === jamaita) {
+                document.getElementById('btn-res').style.display = 'block';
+                logToDB("OK", "Paso 2 completado");
             } else {
-                logError(msg);
-                // El botón de reintento se mantiene visible para que el operador corrija
+                logToDB("NG", `Mezcla: Jamaita ${jamaita} vs Caja ${val}`);
+                document.getElementById('lock').style.display = 'flex';
             }
-        }, 1200);
+        } else if(step === 3) {
+            const s = await getDoc(doc(db, "Maestro_Partes", val));
+            if(s.exists() && String(s.data().Sebango) === jamaita) {
+                initStep4(s.data());
+            } else {
+                logToDB("NG", `ID ${val} no pertenece a ${jamaita}`);
+                document.getElementById('lock').style.display = 'flex';
+            }
+        }
     }
 
-    window.retryScan = () => {
-        paused = false;
-        document.getElementById('btn-retry-ui').style.display = 'none';
-        document.getElementById('btn-res').style.display = 'none';
-        document.getElementById('btn-finish-ui').style.display = 'none';
-        document.getElementById('res-val').innerText = "---";
-        ocrLoop();
-    };
+    function initStep4(data) {
+        step = 4;
+        document.getElementById('step-txt').innerText = "PASO 4: CONFIRMACIÓN TEKIN";
+        document.getElementById('btn-retry').style.display = 'none';
+        document.getElementById('step4-container').style.display = 'block';
+        
+        const img = document.getElementById('img-tekin');
+        img.src = data.img_url;
+        img.style.display = 'block';
+        
+        correctTekin = data.Tekin || "No definido";
+        const options = [correctTekin, "TEKIN_ERR_01", "TEKIN_ERR_02"].sort(() => Math.random() - 0.5);
+        
+        const area = document.getElementById('options-area');
+        area.innerHTML = "";
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = "option-btn";
+            btn.innerText = opt;
+            btn.onclick = () => verifyTekin(opt);
+            area.appendChild(btn);
+        });
+    }
+
+    function verifyTekin(selected) {
+        if(selected === correctTekin) {
+            document.getElementById('options-area').innerHTML = "<p style='color:green; font-weight:bold; text-align:center;'>✅ TEKIN CORRECTO</p>";
+            document.getElementById('btn-finish').style.display = 'block';
+            logToDB("OK", "Paso 4 validado correctamente");
+        } else {
+            logToDB("NG", `Error de selección Tekin: esperado ${correctTekin}, seleccionó ${selected}`);
+            document.getElementById('lock').style.display = 'flex';
+        }
+    }
 
     window.goNext = () => {
-        step++; 
-        paused = false; 
+        step++; paused = false;
         document.getElementById('btn-res').style.display = 'none';
-        document.getElementById('btn-retry-ui').style.display = 'none';
         document.getElementById('res-val').innerText = "---";
-        
-        const txt = document.getElementById('step-txt');
-        if(step === 2) txt.innerText = "PASO 2: CAJA";
-        if(step === 3) txt.innerText = "PASO 3: ID CLIENTE";
+        document.getElementById('step-txt').innerText = step === 2 ? "PASO 2: CAJA" : "PASO 3: ID CLIENTE";
         ocrLoop();
     };
 
     window.resetToStepOne = () => {
-        step = 1;
-        jamaita = "";
-        paused = false;
-        document.getElementById('btn-finish-ui').style.display = 'none';
-        document.getElementById('btn-retry-ui').style.display = 'none';
-        document.getElementById('res-val').innerText = "---";
+        step = 1; jamaita = ""; paused = false;
+        document.getElementById('step4-container').style.display = 'none';
+        document.getElementById('btn-finish').style.display = 'none';
+        document.getElementById('btn-retry').style.display = 'block';
         document.getElementById('step-txt').innerText = "PASO 1: JAMAITA";
+        document.getElementById('res-val').innerText = "---";
         ocrLoop();
     };
 
-    function logError(m) {
-        addDoc(collection(db, "Bitacora_Incidencias"), { 
-            usuario: user.nombre, status: "NG", customer_id: jamaita, error_msg: m, timestamp: serverTimestamp() 
-        });
-    }
+    window.unlock = async () => {
+        const p = document.getElementById('pin-tl').value;
+        const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", p));
+        const s = await getDocs(q);
+        if(!s.empty) location.reload(); else alert("PIN Incorrecto");
+    };
 </script>
 </body>
 </html>
