@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX Poka-Yoke V4.1</title>
+    <title>KTMEX Poka-Yoke V4.3</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
@@ -11,12 +11,12 @@
         .panel { position: fixed; bottom: 0; width: 100%; height: 60%; background: white; color: #333; border-radius: 25px 25px 0 0; padding: 20px; box-sizing: border-box; overflow-y: auto; }
         .btn-main { background: #1a1c2c; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 10px; cursor: pointer; }
         .btn-flash { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; border: 1px solid white; padding: 12px; border-radius: 50%; z-index: 100; font-size: 20px; }
-        #res-val { font-size: 26px; font-weight: 800; color: #e30613; text-align: center; border: 2px dashed #e30613; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 10px; }
+        #res-val { font-size: 26px; font-weight: 800; color: #e30613; text-align: center; border: 2px dashed #e30613; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 10px; min-height: 40px; }
         .img-verify { width: 100%; height: 140px; object-fit: contain; background: #f0f0f0; border-radius: 12px; display: none; margin-bottom: 10px; border: 1px solid #ddd; }
-        .option-btn { background: #f8f9fa; border: 2px solid #dee2e6; color: #333; padding: 12px; width: 100%; border-radius: 8px; margin-bottom: 8px; text-align: left; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .option-btn:active { background: #e9ecef; }
+        .option-btn { background: #f8f9fa; border: 2px solid #dee2e6; color: #333; padding: 12px; width: 100%; border-radius: 8px; margin-bottom: 8px; text-align: left; font-weight: 600; cursor: pointer; }
         .lock-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
         input { width: 80%; padding: 15px; border-radius: 8px; border: none; font-size: 18px; text-align: center; }
+        #retry-counter { font-size: 12px; color: #666; text-align: center; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -33,7 +33,10 @@
     </div>
 
     <div id="ui-scan" style="display:none;">
-        <h3 id="step-txt" style="margin-top:0; color:#1a1c2c;">PASO 1: JAMAITA</h3>
+        <div style="display:flex; justify-content: space-between;">
+            <h3 id="step-txt" style="margin-top:0; color:#1a1c2c;">PASO 1: JAMAITA</h3>
+            <span id="user-display" style="font-size:10px; color:#999;"></span>
+        </div>
         <div id="res-val">---</div>
         
         <div id="step4-container" style="display:none;">
@@ -43,15 +46,16 @@
         </div>
         
         <button id="btn-res" class="btn-main" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
-        <button id="btn-retry" class="btn-main" style="background:#f39c12;" onclick="secureRetry()">🔄 REPETIR ESCANEO</button>
+        <button id="btn-retry" class="btn-main" style="background:#f39c12; display:block;" onclick="handleRetry()">🔄 REPETIR ESCANEO</button>
+        <div id="retry-counter">Intentos: 0/5</div>
         <button id="btn-finish" class="btn-main" style="display:none; background:#27ae60;" onclick="resetToStepOne()">✅ FINALIZAR Y NUEVA PIEZA</button>
     </div>
 </div>
 
 <div id="lock" class="lock-ui">
     <h1 style="font-size:50px; margin:0;">🛑</h1>
-    <h2>BLOQUEO DE SEGURIDAD</h2>
-    <p>Se requiere PIN de Líder para continuar.</p>
+    <h2>EXCESO DE REINTENTOS</h2>
+    <p>Se alcanzó el límite de 5 repeticiones. Requiere PIN de Líder.</p>
     <input type="password" id="pin-tl" placeholder="PIN LÍDER">
     <button class="btn-main" style="background:white; color:#e30613; margin-top:20px; width:80%;" onclick="unlock()">DESBLOQUEAR EQUIPO</button>
 </div>
@@ -74,6 +78,7 @@
 
     let user = null; let step = 1; let jamaita = ""; let paused = false; let track = null;
     let correctTekin = "";
+    let retryCount = 0; // Contador de reintentos
 
     window.toggleFlash = async () => {
         if (!track) return;
@@ -100,6 +105,7 @@
 
     function start(u) {
         user = u;
+        document.getElementById('user-display').innerText = u.nombre;
         document.getElementById('ui-login').style.display = 'none';
         document.getElementById('ui-scan').style.display = 'block';
         navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(s => {
@@ -118,9 +124,21 @@
         });
     }
 
-    window.secureRetry = () => {
-        logToDB("NG", "Reintento solicitado por operador (Bloqueo)");
-        document.getElementById('lock').style.display = 'flex';
+    // NUEVA LÓGICA DE REINTENTO CON CONTADOR
+    window.handleRetry = () => {
+        retryCount++;
+        document.getElementById('retry-counter').innerText = `Intentos: ${retryCount}/5`;
+        
+        if (retryCount >= 5) {
+            logToDB("NG", "Bloqueo por exceso de reintentos (5/5)");
+            document.getElementById('lock').style.display = 'flex';
+        } else {
+            // Reintento normal (limpiar y continuar escaneando)
+            paused = false;
+            document.getElementById('btn-res').style.display = 'none';
+            document.getElementById('res-val').innerText = "---";
+            ocrLoop();
+        }
     };
 
     async function ocrLoop() {
@@ -129,13 +147,18 @@
         const c = document.createElement('canvas'); c.width = 400; c.height = 300;
         c.getContext('2d').drawImage(v, 0, 0, 400, 300);
         const { data: { text } } = await Tesseract.recognize(c, 'eng');
-        const raw = text.replace(/[^A-Z0-9]/g, '').toUpperCase();
+        const raw = text.toUpperCase().split(/[\s\n]+/);
         
-        const patS = raw.match(/([TKP]\d{3,4})/);
-        const patM = raw.match(/(M\d{3,4})/);
+        let foundS = null; let foundM = null;
 
-        if ((step === 1 || step === 2) && patS && patS[0].length <= 5) processFound(patS[0]);
-        else if (step === 3 && patM) processFound(patM[0]);
+        for (let word of raw) {
+            const pure = word.replace(/[^A-Z0-9]/g, '');
+            if (pure.match(/^[TKP]\d{3,4}$/) && !word.includes('-') && word.length <= 5) foundS = pure;
+            if (pure.match(/^M\d{3,4}$/)) foundM = pure;
+        }
+
+        if ((step === 1 || step === 2) && foundS) processFound(foundS);
+        else if (step === 3 && foundM) processFound(foundM);
 
         requestAnimationFrame(ocrLoop);
     }
@@ -147,21 +170,22 @@
         if(step === 1) { 
             jamaita = val; 
             document.getElementById('btn-res').style.display = 'block';
-            logToDB("OK", "Paso 1 completado");
+            logToDB("OK", "Paso 1: Jamaita OK");
         } else if(step === 2) {
             if(val === jamaita) {
                 document.getElementById('btn-res').style.display = 'block';
-                logToDB("OK", "Paso 2 completado");
+                logToDB("OK", "Paso 2: Caja OK");
             } else {
-                logToDB("NG", `Mezcla: Jamaita ${jamaita} vs Caja ${val}`);
+                logToDB("NG", `Mezcla detectada en Paso 2: ${val}`);
                 document.getElementById('lock').style.display = 'flex';
             }
         } else if(step === 3) {
             const s = await getDoc(doc(db, "Maestro_Partes", val));
             if(s.exists() && String(s.data().Sebango) === jamaita) {
+                logToDB("OK", "Paso 3: ID Cliente OK");
                 initStep4(s.data());
             } else {
-                logToDB("NG", `ID ${val} no pertenece a ${jamaita}`);
+                logToDB("NG", `ID incorrecto en Paso 3: ${val}`);
                 document.getElementById('lock').style.display = 'flex';
             }
         }
@@ -171,50 +195,53 @@
         step = 4;
         document.getElementById('step-txt').innerText = "PASO 4: CONFIRMACIÓN TEKIN";
         document.getElementById('btn-retry').style.display = 'none';
+        document.getElementById('retry-counter').style.display = 'none';
         document.getElementById('step4-container').style.display = 'block';
         
         const img = document.getElementById('img-tekin');
         img.src = data.img_url;
         img.style.display = 'block';
         
-        correctTekin = data.Tekin || "No definido";
-        const options = [correctTekin, "TEKIN_ERR_01", "TEKIN_ERR_02"].sort(() => Math.random() - 0.5);
+        correctTekin = data.Tekin || "S/D";
+        const options = [correctTekin, "OPCIÓN_B", "OPCIÓN_C"].sort(() => Math.random() - 0.5);
         
         const area = document.getElementById('options-area');
         area.innerHTML = "";
         options.forEach(opt => {
-            const btn = document.createElement('button');
-            btn.className = "option-btn";
-            btn.innerText = opt;
-            btn.onclick = () => verifyTekin(opt);
-            area.appendChild(btn);
+            const b = document.createElement('button');
+            b.className = "option-btn";
+            b.innerText = opt;
+            b.onclick = () => {
+                if(opt === correctTekin) {
+                    area.innerHTML = "<p style='color:green; font-weight:bold; text-align:center;'>✅ VALIDADO</p>";
+                    document.getElementById('btn-finish').style.display = 'block';
+                    logToDB("OK", "Paso 4: Tekin verificado");
+                } else {
+                    logToDB("NG", "Error selección Tekin");
+                    document.getElementById('lock').style.display = 'flex';
+                }
+            };
+            area.appendChild(b);
         });
-    }
-
-    function verifyTekin(selected) {
-        if(selected === correctTekin) {
-            document.getElementById('options-area').innerHTML = "<p style='color:green; font-weight:bold; text-align:center;'>✅ TEKIN CORRECTO</p>";
-            document.getElementById('btn-finish').style.display = 'block';
-            logToDB("OK", "Paso 4 validado correctamente");
-        } else {
-            logToDB("NG", `Error de selección Tekin: esperado ${correctTekin}, seleccionó ${selected}`);
-            document.getElementById('lock').style.display = 'flex';
-        }
     }
 
     window.goNext = () => {
         step++; paused = false;
         document.getElementById('btn-res').style.display = 'none';
         document.getElementById('res-val').innerText = "---";
-        document.getElementById('step-txt').innerText = step === 2 ? "PASO 2: CAJA" : "PASO 3: ID CLIENTE";
+        const t = document.getElementById('step-txt');
+        if(step === 2) t.innerText = "PASO 2: CAJA";
+        if(step === 3) t.innerText = "PASO 3: ID CLIENTE";
         ocrLoop();
     };
 
     window.resetToStepOne = () => {
-        step = 1; jamaita = ""; paused = false;
+        step = 1; jamaita = ""; paused = false; retryCount = 0; // Reiniciamos contador de reintentos
         document.getElementById('step4-container').style.display = 'none';
         document.getElementById('btn-finish').style.display = 'none';
         document.getElementById('btn-retry').style.display = 'block';
+        document.getElementById('retry-counter').style.display = 'block';
+        document.getElementById('retry-counter').innerText = "Intentos: 0/5";
         document.getElementById('step-txt').innerText = "PASO 1: JAMAITA";
         document.getElementById('res-val').innerText = "---";
         ocrLoop();
