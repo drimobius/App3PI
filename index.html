@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX Poka-Yoke V4.5</title>
+    <title>KTMEX Poka-Yoke V4.6</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
@@ -17,6 +17,7 @@
         .lock-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
         input { width: 85%; padding: 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 18px; text-align: center; margin-bottom: 10px; }
         #retry-counter { font-size: 13px; color: #666; text-align: center; margin-top: 5px; font-weight: bold; }
+        #msg-pop { color: #e30613; font-weight: bold; text-align: center; display: none; margin-top: 10px; background: #ffebeb; padding: 8px; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -39,6 +40,8 @@
         </div>
         <div id="res-val">---</div>
         
+        <div id="msg-pop"></div>
+
         <div id="step4-container" style="display:none;">
             <p style="font-weight:bold; font-size:14px; margin-bottom:5px;">Verificación Visual de Tekin:</p>
             <img id="img-tekin" class="img-verify">
@@ -97,13 +100,12 @@
         const nom = document.getElementById('nom-input').value;
         const pin = document.getElementById('pin-input').value;
         const s = await getDoc(doc(db, "Usuarios", nom));
-        if(!s.exists()) return alert("Nómina no registrada");
+        if(!s.exists()) return;
         const u = s.data();
         if(u.nivel === "Operador") start(u);
         else {
             document.getElementById('pin-box').style.display = 'block';
             if(pin === u.pin) start(u);
-            else if(pin !== "") alert("PIN Incorrecto");
         }
     };
 
@@ -138,11 +140,18 @@
         document.getElementById('retry-counter').innerText = `Intentos de error: ${retryCount}/5`;
     }
 
+    function showStatusMsg(txt) {
+        const el = document.getElementById('msg-pop');
+        el.innerText = txt;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 2000);
+    }
+
     function resumeScanning() {
         paused = false;
         document.getElementById('btn-res').style.display = 'none';
         document.getElementById('res-val').innerText = "---";
-        ocrLoop();
+        requestAnimationFrame(ocrLoop); // Forzamos el reinicio del loop
     }
 
     function triggerLock(msg) {
@@ -185,7 +194,10 @@
                 retryCount++;
                 updateRetryUI();
                 if(retryCount >= 5) triggerLock("MEZCLA DE SEBANGO");
-                else { alert("Sebango no coincide, reintente."); resumeScanning(); }
+                else { 
+                    showStatusMsg("Sebango incorrecto. Reintentando..."); 
+                    setTimeout(resumeScanning, 1500); 
+                }
             } else {
                 document.getElementById('btn-res').style.display = 'block';
                 logToDB("OK", "Paso 2: Caja OK");
@@ -200,7 +212,10 @@
                 retryCount++;
                 updateRetryUI();
                 if(retryCount >= 5) triggerLock("ID CLIENTE INCORRECTO");
-                else { alert("ID no pertenece al Sebango, reintente."); resumeScanning(); }
+                else { 
+                    showStatusMsg("ID no pertenece al Sebango. Reintentando..."); 
+                    setTimeout(resumeScanning, 1500); 
+                }
             }
         }
     }
@@ -226,13 +241,10 @@
         document.getElementById('step4-container').style.display = 'block';
         
         const img = document.getElementById('img-tekin');
-        // Asegurar que la URL de imagen sea cargada
         if(data.img_url) { img.src = data.img_url; img.style.display = 'block'; }
         
         t_ok = data.Tekin_OK || "Correcto";
         let t_ng = data.Tekin_NG || "Incorrecto";
-        
-        // Solo dos opciones mezcladas aleatoriamente
         const opts = [t_ok, t_ng].sort(() => Math.random() - 0.5);
         
         const area = document.getElementById('options-area');
@@ -268,15 +280,12 @@
 
     window.unlock = async () => {
         const p = document.getElementById('pin-tl').value;
-        if(!p) return alert("Ingrese PIN");
         const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", p));
         const s = await getDocs(q);
         if(!s.empty) {
             document.getElementById('lock').style.display = 'none';
             document.getElementById('pin-tl').value = "";
             resetToStepOne();
-        } else {
-            alert("PIN de Líder Incorrecto");
         }
     };
 </script>
