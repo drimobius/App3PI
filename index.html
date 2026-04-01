@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KTMEX Poka-Yoke V4.4</title>
+    <title>KTMEX Poka-Yoke V4.5</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
@@ -12,8 +12,8 @@
         .btn-main { background: #1a1c2c; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 10px; cursor: pointer; }
         .btn-flash { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; border: 1px solid white; padding: 12px; border-radius: 50%; z-index: 100; font-size: 20px; }
         #res-val { font-size: 26px; font-weight: 800; color: #e30613; text-align: center; border: 2px dashed #e30613; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 10px; min-height: 40px; }
-        .img-verify { width: 100%; height: 140px; object-fit: contain; background: #f0f0f0; border-radius: 12px; display: none; margin-bottom: 10px; border: 1px solid #ddd; }
-        .option-btn { background: #f8f9fa; border: 2px solid #dee2e6; color: #333; padding: 12px; width: 100%; border-radius: 8px; margin-bottom: 8px; text-align: left; font-weight: 600; cursor: pointer; }
+        .img-verify { width: 100%; height: 160px; object-fit: contain; background: #f0f0f0; border-radius: 12px; display: none; margin-bottom: 10px; border: 1px solid #ddd; }
+        .option-btn { background: #f8f9fa; border: 2px solid #dee2e6; color: #333; padding: 15px; width: 100%; border-radius: 8px; margin-bottom: 10px; text-align: center; font-weight: bold; cursor: pointer; font-size: 18px; }
         .lock-ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e30613; z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
         input { width: 85%; padding: 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 18px; text-align: center; margin-bottom: 10px; }
         #retry-counter { font-size: 13px; color: #666; text-align: center; margin-top: 5px; font-weight: bold; }
@@ -40,15 +40,15 @@
         <div id="res-val">---</div>
         
         <div id="step4-container" style="display:none;">
-            <p style="font-weight:bold; font-size:14px; margin-bottom:5px;">Confirme Tekin Visual:</p>
+            <p style="font-weight:bold; font-size:14px; margin-bottom:5px;">Verificación Visual de Tekin:</p>
             <img id="img-tekin" class="img-verify">
-            <div id="options-area"></div>
+            <div id="options-area" style="display: flex; flex-direction: column;"></div>
         </div>
         
         <div id="controls-standard">
             <button id="btn-res" class="btn-main" style="display:none; background:#27ae60;" onclick="goNext()">CONTINUAR</button>
             <button id="btn-retry" class="btn-main" style="background:#f39c12;" onclick="handleRetry()">🔄 REPETIR ESCANEO</button>
-            <div id="retry-counter">Intentos: 0/5</div>
+            <div id="retry-counter">Intentos de error: 0/5</div>
         </div>
         
         <button id="btn-finish" class="btn-main" style="display:none; background:#27ae60;" onclick="resetToStepOne()">✅ FINALIZAR PIEZA</button>
@@ -57,8 +57,8 @@
 
 <div id="lock" class="lock-ui">
     <h1 style="font-size:50px; margin:0;">🛑</h1>
-    <h2 id="lock-msg">SISTEMA BLOQUEADO</h2>
-    <p>Requiere validación de Líder (PIN).</p>
+    <h2 id="lock-msg">BLOQUEO DE SEGURIDAD</h2>
+    <p>Exceso de errores o reintentos. Requiere PIN de Líder.</p>
     <input type="password" id="pin-tl" placeholder="PIN LÍDER">
     <button class="btn-main" style="background:white; color:#e30613; width:85%;" onclick="unlock()">DESBLOQUEAR</button>
 </div>
@@ -80,7 +80,7 @@
     const db = getFirestore(app);
 
     let user = null; let step = 1; let jamaita = ""; let paused = false; let track = null;
-    let correctTekin = ""; let retryCount = 0; let pendingData = null;
+    let t_ok = ""; let retryCount = 0; let pendingData = null;
 
     window.toggleFlash = async () => {
         if (!track) return;
@@ -90,14 +90,14 @@
                 const s = track.getSettings();
                 await track.applyConstraints({ advanced: [{ torch: !s.torch }] });
             }
-        } catch(e) { console.log("Flash no soportado"); }
+        } catch(e) {}
     };
 
     window.checkLogin = async () => {
         const nom = document.getElementById('nom-input').value;
         const pin = document.getElementById('pin-input').value;
         const s = await getDoc(doc(db, "Usuarios", nom));
-        if(!s.exists()) return alert("Nómina no válida");
+        if(!s.exists()) return alert("Nómina no registrada");
         const u = s.data();
         if(u.nivel === "Operador") start(u);
         else {
@@ -126,18 +126,30 @@
 
     window.handleRetry = () => {
         retryCount++;
-        document.getElementById('retry-counter').innerText = `Intentos: ${retryCount}/5`;
+        updateRetryUI();
         if (retryCount >= 5) {
-            logToDB("NG", "Bloqueo por límite de reintentos (5/5)");
-            document.getElementById('lock-msg').innerText = "EXCESO DE REINTENTOS";
-            document.getElementById('lock').style.display = 'flex';
+            triggerLock("EXCESO DE REINTENTOS");
         } else {
-            paused = false;
-            document.getElementById('btn-res').style.display = 'none';
-            document.getElementById('res-val').innerText = "---";
-            ocrLoop();
+            resumeScanning();
         }
     };
+
+    function updateRetryUI() {
+        document.getElementById('retry-counter').innerText = `Intentos de error: ${retryCount}/5`;
+    }
+
+    function resumeScanning() {
+        paused = false;
+        document.getElementById('btn-res').style.display = 'none';
+        document.getElementById('res-val').innerText = "---";
+        ocrLoop();
+    }
+
+    function triggerLock(msg) {
+        logToDB("NG", msg);
+        document.getElementById('lock-msg').innerText = msg;
+        document.getElementById('lock').style.display = 'flex';
+    }
 
     async function ocrLoop() {
         if(paused || step > 3) return;
@@ -163,28 +175,32 @@
     async function processFound(val) {
         paused = true;
         document.getElementById('res-val').innerText = val;
-        document.getElementById('btn-res').style.display = 'block';
 
         if(step === 1) { 
             jamaita = val; 
-            logToDB("OK", "Paso 1: Jamaita detectada");
+            document.getElementById('btn-res').style.display = 'block';
+            logToDB("OK", "Paso 1: Jamaita Detectada");
         } else if(step === 2) {
             if(val !== jamaita) {
-                logToDB("NG", `Mezcla: Jamaita ${jamaita} vs Caja ${val}`);
-                document.getElementById('lock-msg').innerText = "MEZCLA DE SEBANGO";
-                document.getElementById('lock').style.display = 'flex';
+                retryCount++;
+                updateRetryUI();
+                if(retryCount >= 5) triggerLock("MEZCLA DE SEBANGO");
+                else { alert("Sebango no coincide, reintente."); resumeScanning(); }
             } else {
+                document.getElementById('btn-res').style.display = 'block';
                 logToDB("OK", "Paso 2: Caja OK");
             }
         } else if(step === 3) {
             const s = await getDoc(doc(db, "Maestro_Partes", val));
             if(s.exists() && String(s.data().Sebango) === jamaita) {
                 pendingData = s.data();
+                document.getElementById('btn-res').style.display = 'block';
                 logToDB("OK", "Paso 3: ID Cliente OK");
             } else {
-                logToDB("NG", `ID ${val} no pertenece a ${jamaita}`);
-                document.getElementById('lock-msg').innerText = "ID CLIENTE INCORRECTO";
-                document.getElementById('lock').style.display = 'flex';
+                retryCount++;
+                updateRetryUI();
+                if(retryCount >= 5) triggerLock("ID CLIENTE INCORRECTO");
+                else { alert("ID no pertenece al Sebango, reintente."); resumeScanning(); }
             }
         }
     }
@@ -210,10 +226,14 @@
         document.getElementById('step4-container').style.display = 'block';
         
         const img = document.getElementById('img-tekin');
-        img.src = data.img_url; img.style.display = 'block';
+        // Asegurar que la URL de imagen sea cargada
+        if(data.img_url) { img.src = data.img_url; img.style.display = 'block'; }
         
-        correctTekin = data.Tekin || "S/D";
-        const opts = [correctTekin, "TEKIN-00X", "TEKIN-ZZY"].sort(() => Math.random() - 0.5);
+        t_ok = data.Tekin_OK || "Correcto";
+        let t_ng = data.Tekin_NG || "Incorrecto";
+        
+        // Solo dos opciones mezcladas aleatoriamente
+        const opts = [t_ok, t_ng].sort(() => Math.random() - 0.5);
         
         const area = document.getElementById('options-area');
         area.innerHTML = "";
@@ -222,14 +242,12 @@
             b.className = "option-btn";
             b.innerText = o;
             b.onclick = () => {
-                if(o === correctTekin) {
-                    area.innerHTML = "<p style='color:green; font-weight:bold; text-align:center;'>✅ TEKIN OK</p>";
+                if(o === t_ok) {
+                    area.innerHTML = "<p style='color:green; font-weight:bold; text-align:center;'>✅ VALIDADO CORRECTAMENTE</p>";
                     document.getElementById('btn-finish').style.display = 'block';
-                    logToDB("OK", "Paso 4: Tekin verificado");
+                    logToDB("OK", "Paso 4: Tekin Verificado");
                 } else {
-                    logToDB("NG", "Error selección visual Tekin");
-                    document.getElementById('lock-msg').innerText = "ERROR DE SELECCIÓN VISUAL";
-                    document.getElementById('lock').style.display = 'flex';
+                    triggerLock("ERROR SELECCIÓN TEKIN");
                 }
             };
             area.appendChild(b);
@@ -242,7 +260,7 @@
         document.getElementById('controls-standard').style.display = 'block';
         document.getElementById('btn-finish').style.display = 'none';
         document.getElementById('btn-res').style.display = 'none';
-        document.getElementById('retry-counter').innerText = "Intentos: 0/5";
+        document.getElementById('retry-counter').innerText = "Intentos de error: 0/5";
         document.getElementById('step-txt').innerText = "PASO 1: JAMAITA";
         document.getElementById('res-val').innerText = "---";
         ocrLoop();
@@ -254,7 +272,6 @@
         const q = query(collection(db, "Usuarios"), where("nivel", "==", "Lider"), where("pin", "==", p));
         const s = await getDocs(q);
         if(!s.empty) {
-            // Desbloqueo exitoso: Reiniciamos la pieza actual
             document.getElementById('lock').style.display = 'none';
             document.getElementById('pin-tl').value = "";
             resetToStepOne();
